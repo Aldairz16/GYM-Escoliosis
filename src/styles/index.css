@@ -245,6 +245,17 @@ body {
     z-index: 100;
 }
 
+/* Hide nav during active workout */
+body.workout-active .bottom-nav,
+body.workout-active .sidebar {
+    display: none !important;
+}
+
+body.workout-active .app-content {
+    padding-bottom: var(--sp-lg);
+    margin-left: 0;
+}
+
 .nav-item {
     display: flex;
     flex-direction: column;

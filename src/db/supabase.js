@@ -37,10 +37,11 @@ export async function updateExercise(id, updates) {
 }
 
 export async function uploadExerciseImage(exerciseId, file) {
-    const ext = file.name.split('.').pop();
-    const path = `exercises/${exerciseId}.${ext}`;
+    const mimeToExt = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic' };
+    const ext = mimeToExt[file.type] || file.name?.split('.').pop() || 'jpg';
+    const path = `exercises/${exerciseId}_${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage.from('ejercicios')
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
     if (upErr) throw upErr;
     const { data: { publicUrl } } = supabase.storage.from('ejercicios').getPublicUrl(path);
     await updateExercise(exerciseId, { url_imagen: publicUrl });

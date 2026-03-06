@@ -46,5 +46,9 @@ async function handleRoute() {
         }
     });
 
+    // Hide nav during active workout
+    const hideNav = path === '/workout/active';
+    document.body.classList.toggle('workout-active', hideNav);
+
     window.scrollTo(0, 0);
 }
