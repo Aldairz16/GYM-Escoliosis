@@ -164,6 +164,24 @@ export async function renderSettings() {
     dataCard.appendChild(importDiv);
     screen.appendChild(dataCard);
 
+    // Logout
+    const logoutCard = document.createElement('div');
+    logoutCard.className = 'card';
+    logoutCard.innerHTML = '<h3 class="section-title">🚪 Sesión</h3>';
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'btn btn-danger btn-block';
+    logoutBtn.textContent = '🚪 Cerrar Sesión';
+    logoutBtn.addEventListener('click', async () => {
+        if (!confirm('¿Cerrar sesión?')) return;
+        const { supabase } = await import('../db/supabaseClient.js');
+        await supabase.auth.signOut();
+        showToast('Sesión cerrada');
+        location.reload();
+    });
+    logoutCard.appendChild(logoutBtn);
+    screen.appendChild(logoutCard);
+
     return screen;
 }
+
 

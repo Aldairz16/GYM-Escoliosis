@@ -3,6 +3,12 @@
 import { supabase } from './supabaseClient.js';
 import { getDB } from './database.js';
 
+// Get current authenticated user ID
+async function getUserId() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+}
+
 // Store name → Supabase table name mapping
 const TABLE_MAP = {
     dias: 'dias',
@@ -48,8 +54,8 @@ export async function syncRecord(storeName, record) {
     if (!tableName) return;
 
     try {
-        // Clean record for Supabase (convert camelCase to snake_case where needed)
-        const cleanRecord = prepareForSupabase(storeName, record);
+        const userId = await getUserId();
+        const cleanRecord = prepareForSupabase(storeName, record, userId);
         const keyField = KEY_MAP[storeName];
 
         const { error } = await supabase
@@ -91,6 +97,7 @@ export async function pushAllToSupabase() {
     if (!isOnline()) throw new Error('Sin conexión a internet');
 
     const db = await getDB();
+    const userId = await getUserId();
     const results = {};
 
     for (const [storeName, tableName] of Object.entries(TABLE_MAP)) {
@@ -101,7 +108,7 @@ export async function pushAllToSupabase() {
                 continue;
             }
 
-            const cleanData = localData.map(r => prepareForSupabase(storeName, r));
+            const cleanData = localData.map(r => prepareForSupabase(storeName, r, userId));
 
             const { error } = await supabase
                 .from(tableName)
@@ -159,8 +166,13 @@ export async function pullFromSupabase() {
 
 // ==================== DATA TRANSFORMATION ====================
 
-function prepareForSupabase(storeName, record) {
+function prepareForSupabase(storeName, record, userId) {
     const clean = { ...record };
+
+    // Inject user_id for all user-owned tables
+    if (userId && !['ejercicios', 'suplementos'].includes(storeName)) {
+        clean.user_id = userId;
+    }
 
     // Remove IndexedDB auto-increment id for tables that use serial IDs
     // (Supabase will auto-assign them)
