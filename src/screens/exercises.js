@@ -93,7 +93,7 @@ export async function renderExercises() {
                 const tile = document.createElement('div');
                 tile.style.cssText = 'position:relative;flex:0 0 85%;scroll-snap-align:start';
                 tile.innerHTML = `
-                  <img src="${url}" alt="${ex.nombre}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);display:block">
+                  <img src="${url}" alt="${ex.nombre}" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:var(--r-md);display:block">
                   <button class="del-img-btn" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
                   <span style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.5);color:white;font-size:0.7rem;padding:2px 8px;border-radius:10px">${i + 1}/${images.length}</span>
                 `;
@@ -111,7 +111,7 @@ export async function renderExercises() {
             // Add tile (if under 4)
             if (images.length < 4) {
                 const addTile = document.createElement('div');
-                addTile.style.cssText = `flex:0 0 ${images.length === 0 ? '100%' : '85%'};scroll-snap-align:start;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;border:2px dashed var(--border);border-radius:var(--r-md);color:var(--text-muted);cursor:pointer;font-size:0.85rem`;
+                addTile.style.cssText = `flex:0 0 ${images.length === 0 ? '100%' : '85%'};scroll-snap-align:start;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;border:2px dashed var(--border);border-radius:var(--r-md);color:var(--text-muted);cursor:pointer;font-size:0.85rem`;
                 addTile.innerHTML = `<span style="font-size:1.8rem">📷</span>${images.length === 0 ? 'Agregar imagen' : `Agregar (${images.length}/4)`}`;
                 addTile.onclick = () => {
                     const input = document.createElement('input');
