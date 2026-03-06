@@ -1,5 +1,5 @@
 // Exercises Screen — with detail modals, alternatives, and image upload
-import { getExercises, createExercise, uploadExerciseImage, updateExercise } from '../db/supabase.js';
+import { getExercises, createExercise, uploadExerciseImage, updateExercise, parseExerciseImages, deleteExerciseImage } from '../db/supabase.js';
 import { showToast, showModal, CATEGORIES, createInput, createChips } from '../components/ui.js';
 
 export async function renderExercises() {
@@ -79,46 +79,68 @@ export async function renderExercises() {
 
     function showExerciseDetail(ex) {
         const content = document.createElement('div');
+        let images = parseExerciseImages(ex.url_imagen);
 
-        // Image or upload area
-        const imgArea = document.createElement('div');
-        imgArea.style.cssText = 'margin-bottom:var(--sp-lg);position:relative';
-        if (ex.url_imagen) {
-            imgArea.innerHTML = `<img src="${ex.url_imagen}" alt="${ex.nombre}" style="width:100%;border-radius:var(--r-md);max-height:200px;object-fit:cover;">`;
-        } else {
-            imgArea.innerHTML = `<div style="width:100%;height:120px;border-radius:var(--r-md);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.9rem;flex-direction:column;gap:4px"><span style="font-size:1.5rem">📷</span>Sin imagen</div>`;
-        }
-        const imgBtn = document.createElement('button');
-        imgBtn.className = 'btn btn-ghost btn-sm';
-        imgBtn.style.cssText = 'position:absolute;bottom:8px;right:8px;background:var(--bg-surface);border:1px solid var(--border)';
-        imgBtn.textContent = ex.url_imagen ? '📷 Cambiar' : '📷 Subir';
-        imgBtn.onclick = () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                imgBtn.textContent = '⏳ Subiendo...';
-                imgBtn.disabled = true;
-                try {
-                    const url = await uploadExerciseImage(ex.id, file);
-                    ex.url_imagen = url;
-                    imgArea.innerHTML = `<img src="${url}" alt="${ex.nombre}" style="width:100%;border-radius:var(--r-md);max-height:200px;object-fit:cover;">`;
-                    imgArea.appendChild(imgBtn);
-                    imgBtn.textContent = '📷 Cambiar';
-                    showToast('✅ Imagen subida');
+        function renderGallery() {
+            const gallery = content.querySelector('.ex-gallery');
+            if (gallery) gallery.remove();
+
+            const g = document.createElement('div');
+            g.className = 'ex-gallery';
+            g.style.cssText = 'display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;margin-bottom:var(--sp-lg);padding-bottom:4px;-webkit-overflow-scrolling:touch';
+
+            images.forEach((url, i) => {
+                const tile = document.createElement('div');
+                tile.style.cssText = 'position:relative;flex:0 0 85%;scroll-snap-align:start';
+                tile.innerHTML = `
+                  <img src="${url}" alt="${ex.nombre}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);display:block">
+                  <button class="del-img-btn" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+                  <span style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,0.5);color:white;font-size:0.7rem;padding:2px 8px;border-radius:10px">${i + 1}/${images.length}</span>
+                `;
+                tile.querySelector('.del-img-btn').onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!confirm('¿Eliminar esta imagen?')) return;
+                    images = await deleteExerciseImage(ex.id, url, images);
+                    ex.url_imagen = images.length > 0 ? JSON.stringify(images) : null;
+                    renderGallery();
                     renderList();
-                } catch (err) {
-                    showToast('❌ Error: ' + err.message);
-                    imgBtn.textContent = '📷 Reintentar';
-                }
-                imgBtn.disabled = false;
-            };
-            input.click();
-        };
-        imgArea.appendChild(imgBtn);
-        content.appendChild(imgArea);
+                };
+                g.appendChild(tile);
+            });
+
+            // Add tile (if under 4)
+            if (images.length < 4) {
+                const addTile = document.createElement('div');
+                addTile.style.cssText = `flex:0 0 ${images.length === 0 ? '100%' : '85%'};scroll-snap-align:start;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;border:2px dashed var(--border);border-radius:var(--r-md);color:var(--text-muted);cursor:pointer;font-size:0.85rem`;
+                addTile.innerHTML = `<span style="font-size:1.8rem">📷</span>${images.length === 0 ? 'Agregar imagen' : `Agregar (${images.length}/4)`}`;
+                addTile.onclick = () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        addTile.innerHTML = '<span style="font-size:1.5rem">⏳</span>Subiendo...';
+                        try {
+                            images = await uploadExerciseImage(ex.id, file, images);
+                            ex.url_imagen = JSON.stringify(images);
+                            showToast('✅ Imagen subida');
+                            renderGallery();
+                            renderList();
+                        } catch (err) {
+                            showToast('❌ ' + err.message);
+                            renderGallery();
+                        }
+                    };
+                    input.click();
+                };
+                g.appendChild(addTile);
+            }
+
+            content.insertBefore(g, content.firstChild);
+        }
+
+        renderGallery();
 
         // Category badge
         const badge = document.createElement('div');

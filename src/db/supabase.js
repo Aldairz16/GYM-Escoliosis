@@ -36,7 +36,8 @@ export async function updateExercise(id, updates) {
     return data?.[0] || null;
 }
 
-export async function uploadExerciseImage(exerciseId, file) {
+export async function uploadExerciseImage(exerciseId, file, existingImages = []) {
+    if (existingImages.length >= 4) throw new Error('Máximo 4 imágenes por ejercicio');
     const mimeToExt = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic' };
     const ext = mimeToExt[file.type] || file.name?.split('.').pop() || 'jpg';
     const path = `exercises/${exerciseId}_${Date.now()}.${ext}`;
@@ -44,11 +45,33 @@ export async function uploadExerciseImage(exerciseId, file) {
         .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
     if (upErr) throw upErr;
     const { data: { publicUrl } } = supabase.storage.from('ejercicios').getPublicUrl(path);
-    // Try to save URL to exercise — may fail for global exercises due to RLS
+    const updated = [...existingImages, publicUrl];
+    const jsonStr = JSON.stringify(updated);
     try {
-        await supabase.from('exercises').update({ url_imagen: publicUrl }).eq('id', exerciseId);
-    } catch (e) { /* RLS may block updates on global exercises, image is still uploaded */ }
-    return publicUrl;
+        await supabase.from('exercises').update({ url_imagen: jsonStr }).eq('id', exerciseId);
+    } catch (e) { /* RLS may block on globals */ }
+    return updated;
+}
+
+// Parse url_imagen: handles both old single-URL strings and new JSON arrays
+export function parseExerciseImages(urlImagen) {
+    if (!urlImagen) return [];
+    try {
+        const parsed = JSON.parse(urlImagen);
+        if (Array.isArray(parsed)) return parsed;
+        return [String(parsed)];
+    } catch (e) {
+        return [urlImagen]; // old format: plain URL string
+    }
+}
+
+export async function deleteExerciseImage(exerciseId, imageUrl, existingImages) {
+    const updated = existingImages.filter(u => u !== imageUrl);
+    const jsonStr = updated.length > 0 ? JSON.stringify(updated) : null;
+    try {
+        await supabase.from('exercises').update({ url_imagen: jsonStr }).eq('id', exerciseId);
+    } catch (e) { /* RLS */ }
+    return updated;
 }
 
 // ==================== Workout Sessions ====================
