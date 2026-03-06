@@ -98,17 +98,56 @@ export async function renderRoutines() {
 
             content.querySelector('#add-ex-btn').onclick = () => {
                 const picker = document.createElement('div');
-                allExercises.forEach(ex => {
-                    const it = document.createElement('div');
-                    it.className = 'list-item';
-                    it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}</div></div>`;
-                    it.onclick = () => {
-                        routineExs.push({ exercise_id: ex.id, exercises: ex, series_sugeridas: 3, reps_sugeridas: ex.es_resistencia ? null : 10, duracion_objetivo_seg: ex.es_resistencia ? 30 : null });
-                        document.querySelectorAll('.modal-overlay')[1]?.remove();
-                        renderEditor();
+                let pickerCat = null;
+
+                function renderPicker() {
+                    picker.innerHTML = '';
+
+                    // Category chips
+                    const chips = document.createElement('div');
+                    chips.className = 'chip-group mb-md';
+                    const allChip = document.createElement('button');
+                    allChip.className = 'chip' + (!pickerCat ? ' active' : '');
+                    allChip.textContent = 'Todos';
+                    allChip.onclick = () => { pickerCat = null; renderPicker(); };
+                    chips.appendChild(allChip);
+                    CATEGORIES.forEach(c => {
+                        const ch = document.createElement('button');
+                        ch.className = 'chip' + (pickerCat === c.value ? ' active' : '');
+                        ch.textContent = c.label;
+                        ch.onclick = () => { pickerCat = c.value; renderPicker(); };
+                        chips.appendChild(ch);
+                    });
+                    picker.appendChild(chips);
+
+                    // Search bar
+                    const search = document.createElement('input');
+                    search.className = 'input mb-md';
+                    search.placeholder = '🔍 Buscar ejercicio...';
+                    search.oninput = () => {
+                        const q = search.value.toLowerCase();
+                        picker.querySelectorAll('.ex-pick').forEach(it => {
+                            it.style.display = it.dataset.name.includes(q) ? '' : 'none';
+                        });
                     };
-                    picker.appendChild(it);
-                });
+                    picker.appendChild(search);
+
+                    // Exercise list
+                    const filtered = allExercises.filter(e => !pickerCat || e.categoria === pickerCat);
+                    filtered.forEach(ex => {
+                        const it = document.createElement('div');
+                        it.className = 'list-item ex-pick';
+                        it.dataset.name = ex.nombre.toLowerCase();
+                        it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}${ex.es_resistencia ? ' • ⏱ resistencia' : ''}</div></div>`;
+                        it.onclick = () => {
+                            routineExs.push({ exercise_id: ex.id, exercises: ex, series_sugeridas: 3, reps_sugeridas: ex.es_resistencia ? null : 10, duracion_objetivo_seg: ex.es_resistencia ? 30 : null });
+                            document.querySelectorAll('.modal-overlay')[1]?.remove();
+                            renderEditor();
+                        };
+                        picker.appendChild(it);
+                    });
+                }
+                renderPicker();
                 showModal({ title: 'Seleccionar Ejercicio', content: picker });
             };
 

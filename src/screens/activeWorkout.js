@@ -75,7 +75,8 @@ export async function renderActiveWorkout() {
             // Exercise header
             const ehdr = document.createElement('div');
             ehdr.className = 'exercise-header';
-            ehdr.innerHTML = `<span class="exercise-name">${g.name}</span>${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}`;
+            ehdr.innerHTML = `<span class="exercise-name">${g.name}</span><div class="flex gap-sm items-center">${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}<button class="btn btn-ghost btn-sm ex-info-btn" title="Info y alternativas">ℹ️</button></div>`;
+            ehdr.querySelector('.ex-info-btn').onclick = () => showExInfo(g.exercise);
             block.appendChild(ehdr);
 
             // Set headers
@@ -365,6 +366,79 @@ export async function renderActiveWorkout() {
             inputEl.value = elapsed;
             overlay.remove();
         };
+    }
+
+    function showExInfo(ex) {
+        if (!ex) return;
+        const content = document.createElement('div');
+
+        // Image
+        if (ex.url_imagen) {
+            const img = document.createElement('img');
+            img.src = ex.url_imagen;
+            img.style.cssText = 'width:100%;border-radius:var(--r-md);margin-bottom:var(--sp-lg);max-height:200px;object-fit:cover;';
+            content.appendChild(img);
+        }
+
+        // Description
+        if (ex.descripcion) {
+            const dl = document.createElement('div');
+            dl.className = 'section-label';
+            dl.textContent = '📝 Descripción';
+            content.appendChild(dl);
+            const dp = document.createElement('p');
+            dp.className = 'text-sm mb-md';
+            dp.style.color = 'var(--text-secondary)';
+            dp.style.lineHeight = '1.6';
+            dp.textContent = ex.descripcion;
+            content.appendChild(dp);
+        }
+
+        // Scoliosis notes
+        if (ex.indicaciones_escoliosis) {
+            const sl = document.createElement('div');
+            sl.className = 'section-label mt-md';
+            sl.textContent = '🏥 Indicaciones Escoliosis';
+            content.appendChild(sl);
+            const sc = document.createElement('div');
+            sc.style.cssText = 'background:var(--accent-dim);border-radius:var(--r-md);padding:var(--sp-md);margin-top:var(--sp-sm);';
+            sc.innerHTML = `<p class="text-sm" style="color:var(--accent)">${ex.indicaciones_escoliosis}</p>`;
+            content.appendChild(sc);
+        }
+
+        // Suggested
+        if (ex.series_sugeridas) {
+            const si = document.createElement('div');
+            si.className = 'text-sm mt-md';
+            si.style.color = 'var(--accent)';
+            si.style.fontWeight = '700';
+            const rt = ex.es_resistencia && ex.tiempo_sugerido_seg ? `${ex.tiempo_sugerido_seg}s` : `${ex.reps_sugeridas || '?'} reps`;
+            si.textContent = `📊 Sugerido: ${ex.series_sugeridas} × ${rt}`;
+            content.appendChild(si);
+        }
+
+        // Alternatives
+        if (ex.alternativas_ids && ex.alternativas_ids.length > 0) {
+            const al = document.createElement('div');
+            al.className = 'section-label mt-lg';
+            al.textContent = '🔄 Alternativas';
+            content.appendChild(al);
+            ex.alternativas_ids.forEach(altId => {
+                const altEx = allExercises.find(e => e.id === altId);
+                if (!altEx) return;
+                const it = document.createElement('div');
+                it.className = 'list-item';
+                it.style.cursor = 'pointer';
+                it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${altEx.nombre}</div><div class="list-item-sub">${altEx.descripcion ? altEx.descripcion.slice(0, 80) + '...' : altEx.categoria}</div></div>`;
+                it.onclick = () => {
+                    document.querySelector('.modal-overlay')?.remove();
+                    showExInfo(altEx);
+                };
+                content.appendChild(it);
+            });
+        }
+
+        showModal({ title: ex.nombre, content });
     }
 
     render();

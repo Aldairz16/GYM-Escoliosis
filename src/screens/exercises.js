@@ -1,4 +1,4 @@
-// Exercises Screen
+// Exercises Screen — with detail modals and alternatives
 import { getExercises, createExercise } from '../db/supabase.js';
 import { showToast, showModal, CATEGORIES, createInput, createChips } from '../components/ui.js';
 
@@ -63,22 +63,124 @@ export async function renderExercises() {
         filtered.forEach(ex => {
             const item = document.createElement('div');
             item.className = 'list-item';
+            item.style.cursor = 'pointer';
             item.innerHTML = `
         <div class="list-icon">${CATEGORIES.find(c => c.value === ex.categoria)?.label.split(' ')[0] || '📋'}</div>
         <div class="list-item-body">
           <div class="list-item-title">${ex.nombre}</div>
-          <div class="list-item-sub">${ex.categoria} ${ex.es_resistencia ? '• ⏱ resistencia' : ''} • ${ex.lado}${ex.user_id ? ' • ⭐ personal' : ''}</div>
+          <div class="list-item-sub">${ex.categoria} ${ex.es_resistencia ? '• ⏱ resistencia' : ''} ${ex.series_sugeridas ? '• ' + ex.series_sugeridas + '×' + (ex.reps_sugeridas || (ex.tiempo_sugerido_seg + 's')) : ''}${ex.user_id ? ' • ⭐ personal' : ''}</div>
         </div>
+        <span style="color:var(--text-muted);font-size:1.1rem">›</span>
       `;
+            item.onclick = () => showExerciseDetail(ex);
             listEl.appendChild(item);
         });
     }
 
+    function showExerciseDetail(ex) {
+        const content = document.createElement('div');
+
+        // Image
+        if (ex.url_imagen) {
+            const img = document.createElement('img');
+            img.src = ex.url_imagen;
+            img.alt = ex.nombre;
+            img.style.cssText = 'width:100%;border-radius:var(--r-md);margin-bottom:var(--sp-lg);max-height:200px;object-fit:cover;';
+            content.appendChild(img);
+        }
+
+        // Category badge
+        const badge = document.createElement('div');
+        badge.className = 'exercise-badge mb-md';
+        badge.style.display = 'inline-block';
+        badge.textContent = `${CATEGORIES.find(c => c.value === ex.categoria)?.label || ex.categoria} ${ex.es_resistencia ? '• ⏱ Resistencia' : ''}`;
+        content.appendChild(badge);
+
+        // Suggested sets
+        if (ex.series_sugeridas) {
+            const setsInfo = document.createElement('div');
+            setsInfo.className = 'text-sm mb-md';
+            setsInfo.style.color = 'var(--accent)';
+            setsInfo.style.fontWeight = '700';
+            const repsText = ex.es_resistencia && ex.tiempo_sugerido_seg
+                ? `${ex.tiempo_sugerido_seg}s`
+                : `${ex.reps_sugeridas || '?'} reps`;
+            setsInfo.textContent = `📊 ${ex.series_sugeridas} series × ${repsText}`;
+            content.appendChild(setsInfo);
+        }
+
+        // Description
+        if (ex.descripcion) {
+            const descLabel = document.createElement('div');
+            descLabel.className = 'section-label mt-md';
+            descLabel.textContent = '📝 Descripción';
+            content.appendChild(descLabel);
+            const desc = document.createElement('p');
+            desc.className = 'text-sm';
+            desc.style.color = 'var(--text-secondary)';
+            desc.style.lineHeight = '1.6';
+            desc.textContent = ex.descripcion;
+            content.appendChild(desc);
+        }
+
+        // Scoliosis notes
+        if (ex.indicaciones_escoliosis) {
+            const scLabel = document.createElement('div');
+            scLabel.className = 'section-label mt-lg';
+            scLabel.textContent = '🏥 Indicaciones para Escoliosis';
+            content.appendChild(scLabel);
+            const sc = document.createElement('div');
+            sc.style.cssText = 'background:var(--accent-dim);border-radius:var(--r-md);padding:var(--sp-md);margin-top:var(--sp-sm);';
+            sc.innerHTML = `<p class="text-sm" style="color:var(--accent)">${ex.indicaciones_escoliosis}</p>`;
+            content.appendChild(sc);
+        }
+
+        // Alternatives
+        if (ex.alternativas_ids && ex.alternativas_ids.length > 0) {
+            const altLabel = document.createElement('div');
+            altLabel.className = 'section-label mt-lg';
+            altLabel.textContent = '🔄 Alternativas';
+            content.appendChild(altLabel);
+
+            ex.alternativas_ids.forEach(altId => {
+                const altEx = exercises.find(e => e.id === altId);
+                if (!altEx) return;
+                const altItem = document.createElement('div');
+                altItem.className = 'list-item';
+                altItem.style.cursor = 'pointer';
+                altItem.innerHTML = `
+          <div class="list-icon">${CATEGORIES.find(c => c.value === altEx.categoria)?.label.split(' ')[0] || '📋'}</div>
+          <div class="list-item-body">
+            <div class="list-item-title">${altEx.nombre}</div>
+            <div class="list-item-sub">${altEx.categoria}${altEx.es_resistencia ? ' • ⏱' : ''}</div>
+          </div>
+        `;
+                altItem.onclick = () => {
+                    document.querySelector('.modal-overlay')?.remove();
+                    showExerciseDetail(altEx);
+                };
+                content.appendChild(altItem);
+            });
+        }
+
+        // Side tag
+        if (ex.lado && ex.lado !== 'bilateral') {
+            const sideTag = document.createElement('div');
+            sideTag.className = 'text-xs text-muted mt-md';
+            sideTag.textContent = `Lado: ${ex.lado}`;
+            content.appendChild(sideTag);
+        }
+
+        showModal({ title: ex.nombre, content });
+    }
+
     function showCreateModal() {
         const content = document.createElement('div');
-        let cat = 'pierna', resist = false, lado = 'bilateral';
+        let cat = 'pierna', resist = false;
 
         content.appendChild(createInput({ label: 'Nombre del ejercicio', id: 'ex-name', placeholder: 'Ej: Sentadilla con barra' }));
+        content.appendChild(createInput({ label: 'Descripción', type: 'textarea', id: 'ex-desc', placeholder: 'Cómo se hace...' }));
+        content.appendChild(createInput({ label: 'Indicaciones escoliosis', type: 'textarea', id: 'ex-escol', placeholder: 'Precauciones para la espalda...' }));
 
         const catLabel = document.createElement('div'); catLabel.className = 'section-label'; catLabel.textContent = 'Categoría';
         content.appendChild(catLabel);
@@ -97,7 +199,11 @@ export async function renderExercises() {
             const nombre = content.querySelector('#ex-name').value.trim();
             if (!nombre) return showToast('❌ Nombre requerido');
             try {
-                await createExercise({ nombre, categoria: cat, es_resistencia: resist, lado });
+                await createExercise({
+                    nombre, categoria: cat, es_resistencia: resist, lado: 'bilateral',
+                    descripcion: content.querySelector('#ex-desc').value || null,
+                    indicaciones_escoliosis: content.querySelector('#ex-escol').value || null,
+                });
                 exercises = await getExercises();
                 document.querySelector('.modal-overlay')?.remove();
                 showToast('✅ Ejercicio creado');
