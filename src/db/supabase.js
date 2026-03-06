@@ -29,6 +29,24 @@ export async function createExercise(ex) {
     return data;
 }
 
+export async function updateExercise(id, updates) {
+    const { data, error } = await supabase.from('exercises')
+        .update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+}
+
+export async function uploadExerciseImage(exerciseId, file) {
+    const ext = file.name.split('.').pop();
+    const path = `exercises/${exerciseId}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('ejercicios')
+        .upload(path, file, { upsert: true });
+    if (upErr) throw upErr;
+    const { data: { publicUrl } } = supabase.storage.from('ejercicios').getPublicUrl(path);
+    await updateExercise(exerciseId, { url_imagen: publicUrl });
+    return publicUrl;
+}
+
 // ==================== Workout Sessions ====================
 export async function createSession(session) {
     const uid = await getUserId();

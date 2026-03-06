@@ -1,5 +1,5 @@
-// Exercises Screen — with detail modals and alternatives
-import { getExercises, createExercise } from '../db/supabase.js';
+// Exercises Screen — with detail modals, alternatives, and image upload
+import { getExercises, createExercise, uploadExerciseImage, updateExercise } from '../db/supabase.js';
 import { showToast, showModal, CATEGORIES, createInput, createChips } from '../components/ui.js';
 
 export async function renderExercises() {
@@ -80,14 +80,45 @@ export async function renderExercises() {
     function showExerciseDetail(ex) {
         const content = document.createElement('div');
 
-        // Image
+        // Image or upload area
+        const imgArea = document.createElement('div');
+        imgArea.style.cssText = 'margin-bottom:var(--sp-lg);position:relative';
         if (ex.url_imagen) {
-            const img = document.createElement('img');
-            img.src = ex.url_imagen;
-            img.alt = ex.nombre;
-            img.style.cssText = 'width:100%;border-radius:var(--r-md);margin-bottom:var(--sp-lg);max-height:200px;object-fit:cover;';
-            content.appendChild(img);
+            imgArea.innerHTML = `<img src="${ex.url_imagen}" alt="${ex.nombre}" style="width:100%;border-radius:var(--r-md);max-height:200px;object-fit:cover;">`;
+        } else {
+            imgArea.innerHTML = `<div style="width:100%;height:120px;border-radius:var(--r-md);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.9rem;flex-direction:column;gap:4px"><span style="font-size:1.5rem">📷</span>Sin imagen</div>`;
         }
+        const imgBtn = document.createElement('button');
+        imgBtn.className = 'btn btn-ghost btn-sm';
+        imgBtn.style.cssText = 'position:absolute;bottom:8px;right:8px;background:var(--bg-surface);border:1px solid var(--border)';
+        imgBtn.textContent = ex.url_imagen ? '📷 Cambiar' : '📷 Subir';
+        imgBtn.onclick = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                imgBtn.textContent = '⏳ Subiendo...';
+                imgBtn.disabled = true;
+                try {
+                    const url = await uploadExerciseImage(ex.id, file);
+                    ex.url_imagen = url;
+                    imgArea.innerHTML = `<img src="${url}" alt="${ex.nombre}" style="width:100%;border-radius:var(--r-md);max-height:200px;object-fit:cover;">`;
+                    imgArea.appendChild(imgBtn);
+                    imgBtn.textContent = '📷 Cambiar';
+                    showToast('✅ Imagen subida');
+                    renderList();
+                } catch (err) {
+                    showToast('❌ Error: ' + err.message);
+                    imgBtn.textContent = '📷 Reintentar';
+                }
+                imgBtn.disabled = false;
+            };
+            input.click();
+        };
+        imgArea.appendChild(imgBtn);
+        content.appendChild(imgArea);
 
         // Category badge
         const badge = document.createElement('div');

@@ -20,7 +20,6 @@ export async function renderHistory() {
     const listContainer = document.createElement('div');
     s.appendChild(listContainer);
 
-    // Add retroactive button
     const addBtn = document.createElement('button');
     addBtn.className = 'btn btn-secondary btn-block mt-lg';
     addBtn.textContent = '+ Agregar sesión pasada';
@@ -29,30 +28,34 @@ export async function renderHistory() {
 
     async function renderCalendar() {
         const dates = await getSessionDates(year, month);
-        const firstDay = new Date(year, month - 1, 1).getDay();
+        const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 0=Sun
         const daysInMonth = new Date(year, month, 0).getDate();
         const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
+        // Convert Sunday=0 to Monday-first: Mon=0, Tue=1, ..., Sun=6
+        const shift = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
         calContainer.innerHTML = `
-      <div class="cal-nav">
-        <button class="btn btn-ghost btn-sm" id="prev-m">◀</button>
-        <span class="cal-month">${monthNames[month - 1]} ${year}</span>
-        <button class="btn btn-ghost btn-sm" id="next-m">▶</button>
-      </div>
-      <div class="cal-header"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
-      <div class="cal-grid" id="cal-grid"></div>
-    `;
+          <div class="cal-nav">
+            <button class="btn btn-ghost btn-sm" id="prev-m">◀</button>
+            <span class="cal-month">${monthNames[month - 1]} ${year}</span>
+            <button class="btn btn-ghost btn-sm" id="next-m">▶</button>
+          </div>
+          <div class="cal-header"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
+          <div class="cal-grid" id="cal-grid"></div>
+        `;
 
         const grid = calContainer.querySelector('#cal-grid');
         const todayStr = new Date().toISOString().split('T')[0];
-        const shift = firstDay === 0 ? 6 : firstDay - 1;
 
+        // Empty cells before day 1
         for (let i = 0; i < shift; i++) {
             const e = document.createElement('div');
             e.className = 'cal-day empty';
             grid.appendChild(e);
         }
 
+        // Day cells
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const el = document.createElement('div');
@@ -60,8 +63,21 @@ export async function renderHistory() {
             if (dateStr === todayStr) el.classList.add('today');
             if (dates.includes(dateStr)) el.classList.add('has-workout');
             el.textContent = d;
-            el.onclick = () => loadDateSessions(dateStr);
+            el.onclick = () => {
+                grid.querySelectorAll('.cal-day').forEach(c => c.classList.remove('selected'));
+                el.classList.add('selected');
+                loadDateSessions(dateStr);
+            };
             grid.appendChild(el);
+        }
+
+        // Pad end to fill row
+        const totalCells = shift + daysInMonth;
+        const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+        for (let i = 0; i < remaining; i++) {
+            const e = document.createElement('div');
+            e.className = 'cal-day empty';
+            grid.appendChild(e);
         }
 
         calContainer.querySelector('#prev-m').onclick = () => { month--; if (month < 1) { month = 12; year--; } renderCalendar(); };
@@ -89,17 +105,17 @@ export async function renderHistory() {
             const exerciseNames = [...new Set(sets.map(s2 => s2.exercise_name).filter(Boolean))];
 
             card.innerHTML = `
-        <div class="flex items-center justify-between mb-md">
-          <div><strong>${sessionTypeLabel(sess.tipo_sesion)}</strong><div class="text-xs text-secondary">${sess.hora_inicio || ''} – ${sess.hora_fin || ''} ${sess.duracion_min ? `(${sess.duracion_min} min)` : ''}</div></div>
-          <div class="text-sm">${sess.rpe ? `RPE ${sess.rpe}` : ''}</div>
-        </div>
-        ${exerciseNames.length > 0 ? `<div class="text-sm text-secondary mb-sm">${exerciseNames.join(', ')}</div>` : ''}
-        ${sets.length > 0 ? `<div class="text-xs text-muted">${sets.length} series total</div>` : ''}
-        ${sess.notas ? `<div class="text-xs text-secondary mt-sm">📝 ${sess.notas}</div>` : ''}
-        <div class="flex gap-sm mt-md">
-          <button class="btn btn-ghost btn-sm del-btn" data-id="${sess.id}">🗑 Borrar</button>
-        </div>
-      `;
+              <div class="flex items-center justify-between mb-md">
+                <div><strong>${sessionTypeLabel(sess.tipo_sesion)}</strong><div class="text-xs text-secondary">${sess.hora_inicio || ''} – ${sess.hora_fin || ''} ${sess.duracion_min ? `(${sess.duracion_min} min)` : ''}</div></div>
+                <div class="text-sm">${sess.rpe ? `RPE ${sess.rpe}` : ''} ${sess.dolor_espalda_durante != null ? `• Dolor ${sess.dolor_espalda_durante}` : ''}</div>
+              </div>
+              ${exerciseNames.length > 0 ? `<div class="text-sm text-secondary mb-sm">${exerciseNames.join(', ')}</div>` : ''}
+              ${sets.length > 0 ? `<div class="text-xs text-muted">${sets.length} series total</div>` : ''}
+              ${sess.notas ? `<div class="text-xs text-secondary mt-sm">📝 ${sess.notas}</div>` : ''}
+              <div class="flex gap-sm mt-md">
+                <button class="btn btn-ghost btn-sm del-btn">🗑 Borrar</button>
+              </div>
+            `;
             card.querySelector('.del-btn').onclick = async (e) => {
                 e.stopPropagation();
                 if (confirm('¿Eliminar esta sesión?')) {
@@ -112,7 +128,6 @@ export async function renderHistory() {
         }
     }
 
-    // Load all recent sessions initially
     async function loadRecent() {
         const sessions = await getSessions();
         listContainer.innerHTML = '';

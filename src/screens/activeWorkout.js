@@ -1,10 +1,11 @@
 // Active Workout Screen — live tracking with timers
-import { getExercises, addSet, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight } from '../db/supabase.js';
+import { getExercises, addSet, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight, deleteSession, getConfig } from '../db/supabase.js';
 import { navigate } from '../router.js';
 import { showToast, showModal, formatTimer, createSlider, CATEGORIES } from '../components/ui.js';
 
 let restInterval = null;
 let resistanceInterval = null;
+let sessionTimerInterval = null;
 
 export async function renderActiveWorkout() {
     const s = document.createElement('div');
@@ -16,7 +17,8 @@ export async function renderActiveWorkout() {
     const allExercises = await getExercises();
     let sessionSets = await getSessionSets(sessionData.id);
     const routineExs = JSON.parse(sessionStorage.getItem('routineExercises') || '[]');
-    let restTime = 60;
+    let restTime = await getConfig('rest_timer', 60);
+    const sessionStart = sessionData.hora_inicio || null;
 
     // Group sets by exercise
     function groupSets() {
@@ -54,13 +56,65 @@ export async function renderActiveWorkout() {
         sessionStorage.removeItem('routineExercises');
     }
 
+    // Calculate elapsed seconds
+    function getElapsed() {
+        if (!sessionStart) return 0;
+        const [h, m] = sessionStart.split(':').map(Number);
+        const now = new Date();
+        const startMin = h * 60 + m;
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const secs = (nowMin - startMin) * 60 + now.getSeconds();
+        return secs < 0 ? secs + 86400 : secs;
+    }
+
     function render() {
+        // Clear previous session timer
+        if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+
         s.innerHTML = '';
-        // Header
+
+        // Header with back button + session timer
         const header = document.createElement('div');
         header.className = 'header-bar';
-        header.innerHTML = `<span class="header-title">🏋️ Entrenamiento en curso</span>`;
+        header.innerHTML = `
+          <button class="back-btn" id="back-btn">←</button>
+          <span class="header-title" style="flex:1">🏋️ En curso</span>
+          <span id="session-clock" class="text-sm" style="color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">${formatTimer(getElapsed())}</span>
+        `;
         s.appendChild(header);
+
+        // Session timer update
+        const clockEl = header.querySelector('#session-clock');
+        sessionTimerInterval = setInterval(() => {
+            if (clockEl) clockEl.textContent = formatTimer(getElapsed());
+        }, 1000);
+
+        // Back button — cancel workout
+        header.querySelector('#back-btn').onclick = () => {
+            if (confirm('¿Salir del entrenamiento?\n\n• "Aceptar" = guardar progreso y salir\n• "Cancelar" = seguir entrenando')) {
+                if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+                // Don't delete — just leave (user can continue from history)
+                sessionStorage.removeItem('activeSession');
+                sessionStorage.removeItem('routineExercises');
+                navigate('/');
+            }
+        };
+
+        // Rest time editor
+        const restRow = document.createElement('div');
+        restRow.className = 'flex items-center justify-between mb-md';
+        restRow.style.cssText = 'background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-sm) var(--sp-md)';
+        restRow.innerHTML = `
+          <span class="text-xs text-secondary">⏱ Descanso entre series</span>
+          <div class="flex items-center gap-sm">
+            <button class="btn-weight" id="rest-minus">−</button>
+            <span id="rest-val" style="font-weight:700;min-width:36px;text-align:center">${restTime}s</span>
+            <button class="btn-weight" id="rest-plus">+</button>
+          </div>
+        `;
+        restRow.querySelector('#rest-minus').onclick = () => { restTime = Math.max(10, restTime - 5); restRow.querySelector('#rest-val').textContent = restTime + 's'; };
+        restRow.querySelector('#rest-plus').onclick = () => { restTime = Math.min(300, restTime + 5); restRow.querySelector('#rest-val').textContent = restTime + 's'; };
+        s.appendChild(restRow);
 
         const groups = groupSets();
 
@@ -72,7 +126,7 @@ export async function renderActiveWorkout() {
             const block = document.createElement('div');
             block.className = 'exercise-block';
 
-            // Exercise header
+            // Exercise header with info button
             const ehdr = document.createElement('div');
             ehdr.className = 'exercise-header';
             ehdr.innerHTML = `<span class="exercise-name">${g.name}</span><div class="flex gap-sm items-center">${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}<button class="btn btn-ghost btn-sm ex-info-btn" title="Info y alternativas">ℹ️</button></div>`;
@@ -89,13 +143,13 @@ export async function renderActiveWorkout() {
             g.sets.forEach(set => {
                 const row = document.createElement('div');
                 row.className = 'set-row';
-
                 row.innerHTML = `<div class="set-num">${set.numero_serie}</div>`;
 
                 // Weight / Duration input
                 const inp1 = document.createElement('input');
                 inp1.className = 'set-input';
                 inp1.type = 'number';
+                inp1.inputMode = 'decimal';
                 inp1.step = g.isResistance ? '1' : '0.5';
                 inp1.value = g.isResistance ? (set.duracion_seg || '') : (set.peso_kg || '');
                 inp1.placeholder = g.isResistance ? 'seg' : 'kg';
@@ -117,6 +171,7 @@ export async function renderActiveWorkout() {
                     const inp2 = document.createElement('input');
                     inp2.className = 'set-input';
                     inp2.type = 'number';
+                    inp2.inputMode = 'numeric';
                     inp2.value = set.repeticiones || '';
                     inp2.placeholder = 'reps';
                     inp2.onchange = () => {
@@ -163,7 +218,7 @@ export async function renderActiveWorkout() {
                 block.appendChild(wbtns);
             }
 
-            // Add set + duplicate
+            // Add set + delete last
             const actions = document.createElement('div');
             actions.className = 'flex gap-sm mt-md';
             const addBtn = document.createElement('button');
@@ -211,6 +266,22 @@ export async function renderActiveWorkout() {
         finishBtn.textContent = '🏁 Terminar Entrenamiento';
         finishBtn.onclick = () => showFinishModal();
         s.appendChild(finishBtn);
+
+        // Cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-danger btn-block mt-md';
+        cancelBtn.textContent = '🗑 Cancelar Entrenamiento';
+        cancelBtn.onclick = async () => {
+            if (confirm('¿Eliminar esta sesión por completo?')) {
+                if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+                await deleteSession(sessionData.id);
+                sessionStorage.removeItem('activeSession');
+                sessionStorage.removeItem('routineExercises');
+                showToast('Sesión eliminada');
+                navigate('/');
+            }
+        };
+        s.appendChild(cancelBtn);
     }
 
     function showExercisePicker() {
@@ -251,17 +322,19 @@ export async function renderActiveWorkout() {
                 const item = document.createElement('div');
                 item.className = 'list-item ex-item';
                 item.dataset.name = ex.nombre.toLowerCase();
-                item.innerHTML = `<div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}${ex.es_resistencia ? ' • ⏱ resistencia' : ''}</div></div>`;
+                item.innerHTML = `
+                  ${ex.url_imagen ? `<img src="${ex.url_imagen}" style="width:40px;height:40px;border-radius:var(--r-sm);object-fit:cover;flex-shrink:0" alt="">` : ''}
+                  <div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}${ex.es_resistencia ? ' • ⏱ resistencia' : ''}</div></div>`;
                 item.onclick = async () => {
                     const lastW = await getLastWeight(ex.id);
-                    const numSets = 3;
+                    const numSets = ex.series_sugeridas || 3;
                     for (let i = 1; i <= numSets; i++) {
                         const newSet = await addSet({
                             session_id: sessionData.id, exercise_id: ex.id,
                             exercise_name: ex.nombre, numero_serie: i,
                             peso_kg: lastW || 0,
-                            repeticiones: ex.es_resistencia ? null : 10,
-                            duracion_seg: ex.es_resistencia ? 0 : null,
+                            repeticiones: ex.es_resistencia ? null : (ex.reps_sugeridas || 10),
+                            duracion_seg: ex.es_resistencia ? (ex.tiempo_sugerido_seg || 0) : null,
                             completada: false
                         });
                         sessionSets.push(newSet);
@@ -292,6 +365,7 @@ export async function renderActiveWorkout() {
         saveBtn.className = 'btn btn-primary btn-block btn-lg mt-lg';
         saveBtn.textContent = '💾 Guardar y Terminar';
         saveBtn.onclick = async () => {
+            if (sessionTimerInterval) clearInterval(sessionTimerInterval);
             notas = content.querySelector('#fin-notas').value;
             const now = new Date();
             const horaFin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -322,7 +396,7 @@ export async function renderActiveWorkout() {
         let remaining = seconds;
         const overlay = document.createElement('div');
         overlay.className = 'rest-overlay';
-        overlay.innerHTML = `<div class="rest-card"><div class="rest-label">Descanso</div><div class="timer-display timer-lg" id="rest-time">${formatTimer(remaining)}</div><button class="btn btn-ghost rest-skip" id="skip-rest">Saltar ▶</button></div>`;
+        overlay.innerHTML = `<div class="rest-card"><div class="rest-label">Descanso</div><div class="timer-display timer-lg" id="rest-time">${formatTimer(remaining)}</div><div class="flex gap-sm justify-between mt-lg"><button class="btn btn-ghost" id="rest-minus-10">−10s</button><button class="btn btn-ghost" id="skip-rest">Saltar ▶</button><button class="btn btn-ghost" id="rest-plus-10">+10s</button></div></div>`;
         document.body.appendChild(overlay);
 
         restInterval = setInterval(() => {
@@ -342,6 +416,8 @@ export async function renderActiveWorkout() {
             restInterval = null;
             overlay.remove();
         };
+        overlay.querySelector('#rest-minus-10').onclick = () => { remaining = Math.max(0, remaining - 10); };
+        overlay.querySelector('#rest-plus-10').onclick = () => { remaining += 10; };
     }
 
     function startResistanceTimer(set, inputEl) {
@@ -372,72 +448,37 @@ export async function renderActiveWorkout() {
         if (!ex) return;
         const content = document.createElement('div');
 
-        // Image
         if (ex.url_imagen) {
             const img = document.createElement('img');
             img.src = ex.url_imagen;
             img.style.cssText = 'width:100%;border-radius:var(--r-md);margin-bottom:var(--sp-lg);max-height:200px;object-fit:cover;';
             content.appendChild(img);
         }
-
-        // Description
         if (ex.descripcion) {
-            const dl = document.createElement('div');
-            dl.className = 'section-label';
-            dl.textContent = '📝 Descripción';
-            content.appendChild(dl);
-            const dp = document.createElement('p');
-            dp.className = 'text-sm mb-md';
-            dp.style.color = 'var(--text-secondary)';
-            dp.style.lineHeight = '1.6';
-            dp.textContent = ex.descripcion;
-            content.appendChild(dp);
+            const dl = document.createElement('div'); dl.className = 'section-label'; dl.textContent = '📝 Descripción'; content.appendChild(dl);
+            const dp = document.createElement('p'); dp.className = 'text-sm mb-md'; dp.style.cssText = 'color:var(--text-secondary);line-height:1.6'; dp.textContent = ex.descripcion; content.appendChild(dp);
         }
-
-        // Scoliosis notes
         if (ex.indicaciones_escoliosis) {
-            const sl = document.createElement('div');
-            sl.className = 'section-label mt-md';
-            sl.textContent = '🏥 Indicaciones Escoliosis';
-            content.appendChild(sl);
-            const sc = document.createElement('div');
-            sc.style.cssText = 'background:var(--accent-dim);border-radius:var(--r-md);padding:var(--sp-md);margin-top:var(--sp-sm);';
-            sc.innerHTML = `<p class="text-sm" style="color:var(--accent)">${ex.indicaciones_escoliosis}</p>`;
-            content.appendChild(sc);
+            const sl = document.createElement('div'); sl.className = 'section-label mt-md'; sl.textContent = '🏥 Indicaciones Escoliosis'; content.appendChild(sl);
+            const sc = document.createElement('div'); sc.style.cssText = 'background:var(--accent-dim);border-radius:var(--r-md);padding:var(--sp-md);margin-top:var(--sp-sm)';
+            sc.innerHTML = `<p class="text-sm" style="color:var(--accent)">${ex.indicaciones_escoliosis}</p>`; content.appendChild(sc);
         }
-
-        // Suggested
         if (ex.series_sugeridas) {
-            const si = document.createElement('div');
-            si.className = 'text-sm mt-md';
-            si.style.color = 'var(--accent)';
-            si.style.fontWeight = '700';
+            const si = document.createElement('div'); si.className = 'text-sm mt-md'; si.style.cssText = 'color:var(--accent);font-weight:700';
             const rt = ex.es_resistencia && ex.tiempo_sugerido_seg ? `${ex.tiempo_sugerido_seg}s` : `${ex.reps_sugeridas || '?'} reps`;
-            si.textContent = `📊 Sugerido: ${ex.series_sugeridas} × ${rt}`;
-            content.appendChild(si);
+            si.textContent = `📊 Sugerido: ${ex.series_sugeridas} × ${rt}`; content.appendChild(si);
         }
-
-        // Alternatives
         if (ex.alternativas_ids && ex.alternativas_ids.length > 0) {
-            const al = document.createElement('div');
-            al.className = 'section-label mt-lg';
-            al.textContent = '🔄 Alternativas';
-            content.appendChild(al);
+            const al = document.createElement('div'); al.className = 'section-label mt-lg'; al.textContent = '🔄 Alternativas'; content.appendChild(al);
             ex.alternativas_ids.forEach(altId => {
                 const altEx = allExercises.find(e => e.id === altId);
                 if (!altEx) return;
-                const it = document.createElement('div');
-                it.className = 'list-item';
-                it.style.cursor = 'pointer';
+                const it = document.createElement('div'); it.className = 'list-item'; it.style.cursor = 'pointer';
                 it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${altEx.nombre}</div><div class="list-item-sub">${altEx.descripcion ? altEx.descripcion.slice(0, 80) + '...' : altEx.categoria}</div></div>`;
-                it.onclick = () => {
-                    document.querySelector('.modal-overlay')?.remove();
-                    showExInfo(altEx);
-                };
+                it.onclick = () => { document.querySelector('.modal-overlay')?.remove(); showExInfo(altEx); };
                 content.appendChild(it);
             });
         }
-
         showModal({ title: ex.nombre, content });
     }
 
