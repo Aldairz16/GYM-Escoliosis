@@ -31,9 +31,9 @@ export async function createExercise(ex) {
 
 export async function updateExercise(id, updates) {
     const { data, error } = await supabase.from('exercises')
-        .update(updates).eq('id', id).select().single();
+        .update(updates).eq('id', id).select();
     if (error) throw error;
-    return data;
+    return data?.[0] || null;
 }
 
 export async function uploadExerciseImage(exerciseId, file) {
@@ -44,7 +44,10 @@ export async function uploadExerciseImage(exerciseId, file) {
         .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
     if (upErr) throw upErr;
     const { data: { publicUrl } } = supabase.storage.from('ejercicios').getPublicUrl(path);
-    await updateExercise(exerciseId, { url_imagen: publicUrl });
+    // Try to save URL to exercise — may fail for global exercises due to RLS
+    try {
+        await supabase.from('exercises').update({ url_imagen: publicUrl }).eq('id', exerciseId);
+    } catch (e) { /* RLS may block updates on global exercises, image is still uploaded */ }
     return publicUrl;
 }
 
