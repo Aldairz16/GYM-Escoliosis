@@ -68,7 +68,7 @@ export async function renderExercises() {
         <div class="list-icon">${CATEGORIES.find(c => c.value === ex.categoria)?.label.split(' ')[0] || '📋'}</div>
         <div class="list-item-body">
           <div class="list-item-title">${ex.nombre}</div>
-          <div class="list-item-sub">${ex.categoria} ${ex.es_resistencia ? '• ⏱ resistencia' : ''} ${ex.series_sugeridas ? '• ' + ex.series_sugeridas + '×' + (ex.reps_sugeridas || (ex.tiempo_sugerido_seg + 's')) : ''}${ex.user_id ? ' • ⭐ personal' : ''}</div>
+          <div class="list-item-sub">${ex.categoria} ${ex.es_resistencia ? '• ⏱ resistencia' : ''} ${ex.series_sugeridas ? '• ' + ex.series_sugeridas + '×' + (ex.reps_sugeridas ? ex.reps_sugeridas : ex.tiempo_sugerido_seg ? ex.tiempo_sugerido_seg + 's' : '—') : ''}${ex.user_id ? ' • ⭐ personal' : ''}</div>
         </div>
         <span style="color:var(--text-muted);font-size:1.1rem">›</span>
       `;
