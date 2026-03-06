@@ -1,116 +1,85 @@
 // Main entry point
 import './styles/index.css';
-import { getDB } from './db/database.js';
-import { seedIfNeeded } from './db/seedData.js';
-import { registerRoute, initRouter } from './router.js';
-import { renderBottomNav } from './components/bottomNav.js';
-import { enableAutoSync } from './db/supabaseSync.js';
 import { supabase } from './db/supabaseClient.js';
+import { getConfig } from './db/supabase.js';
+import { registerRoute, initRouter } from './router.js';
+import { renderBottomNav, renderSidebar } from './components/nav.js';
 import { renderAuth } from './screens/auth.js';
-
-// Screen imports
 import { renderDashboard } from './screens/dashboard.js';
-import { renderWorkout } from './screens/workout.js';
-import { renderRegistro } from './screens/registro.js';
-import { renderSteps } from './screens/steps.js';
-import { renderSleep } from './screens/sleep.js';
-import { renderNutrition } from './screens/nutrition.js';
-import { renderSupplements } from './screens/supplements.js';
+import { renderWorkoutStart } from './screens/workoutStart.js';
+import { renderActiveWorkout } from './screens/activeWorkout.js';
+import { renderHistory } from './screens/history.js';
+import { renderRoutines } from './screens/routines.js';
+import { renderExercises } from './screens/exercises.js';
+import { renderDaily } from './screens/daily.js';
 import { renderMeasurements } from './screens/measurements.js';
-import { renderProgress } from './screens/progress.js';
-import { renderNotes } from './screens/notes.js';
-import { renderMore } from './screens/more.js';
 import { renderSettings } from './screens/settings.js';
 
 async function startApp() {
-  // Initialize database
-  await getDB();
-  await seedIfNeeded();
+  // Load theme
+  const theme = await getConfig('theme', 'dark');
+  document.documentElement.dataset.theme = theme;
 
-  // Setup app shell
   const app = document.getElementById('app');
   app.innerHTML = '';
+
+  const shell = document.createElement('div');
+  shell.className = 'app-shell';
+
+  // Sidebar (visible on PC via CSS)
+  shell.appendChild(renderSidebar());
 
   // Content area
   const content = document.createElement('main');
   content.id = 'content';
-  app.appendChild(content);
+  content.className = 'app-content';
+  shell.appendChild(content);
 
-  // Bottom nav
+  app.appendChild(shell);
+
+  // Bottom nav (visible on mobile via CSS)
   app.appendChild(renderBottomNav());
 
-  // Register routes
+  // Routes
   registerRoute('/', renderDashboard);
-  registerRoute('/entrenar', renderWorkout);
-  registerRoute('/registro', () => renderRegistro());
-  registerRoute('/registro/pasos', renderSteps);
-  registerRoute('/registro/sueno', renderSleep);
-  registerRoute('/registro/alimentacion', renderNutrition);
-  registerRoute('/registro/suplementos', renderSupplements);
-  registerRoute('/registro/mediciones', renderMeasurements);
-  registerRoute('/registro/notas', renderNotes);
-  registerRoute('/progreso', renderProgress);
-  registerRoute('/mas', () => renderMore());
-  registerRoute('/mas/configuracion', renderSettings);
+  registerRoute('/workout', renderWorkoutStart);
+  registerRoute('/workout/active', renderActiveWorkout);
+  registerRoute('/history', renderHistory);
+  registerRoute('/routines', renderRoutines);
+  registerRoute('/exercises', renderExercises);
+  registerRoute('/daily', renderDaily);
+  registerRoute('/measurements', renderMeasurements);
+  registerRoute('/settings', renderSettings);
 
-  // Init router
   initRouter(content);
 
-  // Enable Supabase auto-sync when coming back online
-  enableAutoSync();
-
-  // Register service worker
+  // Service worker
   if ('serviceWorker' in navigator) {
-    try {
-      await navigator.serviceWorker.register('/sw.js');
-    } catch (e) {
-      // SW registration failed, app still works
-    }
+    try { await navigator.serviceWorker.register('/sw.js'); } catch (e) { /* ok */ }
   }
 }
 
 function showLogin() {
   const app = document.getElementById('app');
   app.innerHTML = '';
-  const authScreen = renderAuth(() => {
-    // On successful auth, start the app
-    startApp();
-  });
-  app.appendChild(authScreen);
+  app.appendChild(renderAuth(() => startApp()));
 }
 
 async function init() {
   try {
-    // Check if user is already authenticated
     const { data: { session } } = await supabase.auth.getSession();
-
     if (session) {
-      // User is logged in, start the app
       await startApp();
     } else {
-      // Show login screen
       showLogin();
     }
-
-    // Listen for auth state changes (logout, etc.)
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        showLogin();
-      }
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') showLogin();
     });
   } catch (err) {
     console.error('Init error:', err);
-    // If offline and no session, still try to start the app (IndexedDB works offline)
-    try {
-      await startApp();
-    } catch (e) {
-      document.getElementById('app').innerHTML = `
-        <div class="loading-screen">
-          <p>Error al iniciar la app</p>
-          <p class="text-sm text-secondary">${err.message}</p>
-          <button class="btn btn-primary mt-lg" onclick="location.reload()">Reintentar</button>
-        </div>
-      `;
+    try { await startApp(); } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="loading-screen"><p>Error: ${err.message}</p><button class="btn btn-primary mt-lg" onclick="location.reload()">Reintentar</button></div>`;
     }
   }
 }

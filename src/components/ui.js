@@ -1,171 +1,111 @@
-// Reusable UI component helpers
-
-export function showToast(message, duration = 3000) {
-    // Remove existing toasts
+// Reusable UI components
+export function showToast(msg) {
     document.querySelectorAll('.toast').forEach(t => t.remove());
-
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), duration);
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
 }
 
-export function createSlider({ label, min = 0, max = 10, value = 0, id, onChange }) {
-    const group = document.createElement('div');
-    group.className = 'slider-group';
-    group.innerHTML = `
-    <div class="slider-header">
-      <span class="input-label">${label}</span>
-      <span class="slider-value" id="${id}-value">${value}</span>
-    </div>
-    <input type="range" id="${id}" min="${min}" max="${max}" value="${value}" />
-  `;
-    const input = group.querySelector('input');
-    const display = group.querySelector('.slider-value');
-    input.addEventListener('input', () => {
-        display.textContent = input.value;
-        if (onChange) onChange(parseInt(input.value));
-    });
-    return group;
+export function createSlider({ label, id, min = 0, max = 10, value = 5, onChange }) {
+    const d = document.createElement('div');
+    d.className = 'input-group';
+    d.innerHTML = `<div class="slider-row"><span class="input-label">${label}</span><span class="slider-val" id="${id}-val">${value}</span></div><input type="range" id="${id}" min="${min}" max="${max}" value="${value}">`;
+    const inp = d.querySelector('input');
+    const val = d.querySelector(`#${id}-val`);
+    inp.addEventListener('input', () => { val.textContent = inp.value; if (onChange) onChange(+inp.value); });
+    return d;
 }
 
-export function createInputGroup({ label, type = 'text', id, value = '', placeholder = '', min, max, step }) {
-    const group = document.createElement('div');
-    group.className = 'input-group';
-    let attrs = `type="${type}" id="${id}" class="input" value="${value}" placeholder="${placeholder}"`;
-    if (min !== undefined) attrs += ` min="${min}"`;
-    if (max !== undefined) attrs += ` max="${max}"`;
-    if (step !== undefined) attrs += ` step="${step}"`;
-    group.innerHTML = `
-    <label class="input-label" for="${id}">${label}</label>
-    <input ${attrs} />
-  `;
-    return group;
-}
-
-export function createTextarea({ label, id, value = '', placeholder = '', rows = 3 }) {
-    const group = document.createElement('div');
-    group.className = 'input-group';
-    group.innerHTML = `
-    <label class="input-label" for="${id}">${label}</label>
-    <textarea id="${id}" class="input" placeholder="${placeholder}" rows="${rows}">${value}</textarea>
-  `;
-    return group;
+export function createInput({ label, type = 'text', id, value = '', placeholder = '', min, max, step }) {
+    const d = document.createElement('div');
+    d.className = 'input-group';
+    d.innerHTML = `<label class="input-label" for="${id}">${label}</label>`;
+    const inp = document.createElement(type === 'textarea' ? 'textarea' : 'input');
+    inp.className = 'input'; inp.id = id; inp.value = value; inp.placeholder = placeholder;
+    if (type !== 'textarea') inp.type = type;
+    if (min !== undefined) inp.min = min;
+    if (max !== undefined) inp.max = max;
+    if (step) inp.step = step;
+    d.appendChild(inp);
+    return d;
 }
 
 export function createSelect({ label, id, options, value = '' }) {
-    const group = document.createElement('div');
-    group.className = 'input-group';
-    const optHTML = options.map(o => {
-        const optVal = typeof o === 'object' ? o.value : o;
-        const optLabel = typeof o === 'object' ? o.label : o;
-        return `<option value="${optVal}" ${optVal === value ? 'selected' : ''}>${optLabel}</option>`;
-    }).join('');
-    group.innerHTML = `
-    <label class="input-label" for="${id}">${label}</label>
-    <select id="${id}" class="input">${optHTML}</select>
-  `;
-    return group;
-}
-
-export function createToggle({ label, id, checked = false }) {
-    const group = document.createElement('div');
-    group.className = 'toggle-group';
-    group.innerHTML = `
-    <span class="input-label">${label}</span>
-    <label class="toggle">
-      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} />
-      <span class="toggle-slider"></span>
-    </label>
-  `;
-    return group;
-}
-
-export function createChipGroup({ options, selected = '', id, onSelect }) {
-    const group = document.createElement('div');
-    group.className = 'chip-group';
-    group.id = id;
-    options.forEach(opt => {
-        const chip = document.createElement('button');
-        chip.className = `chip ${opt.value === selected ? 'active' : ''} ${opt.variant || ''}`;
-        chip.textContent = opt.label;
-        chip.dataset.value = opt.value;
-        chip.addEventListener('click', () => {
-            group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            if (onSelect) onSelect(opt.value);
-        });
-        group.appendChild(chip);
+    const d = document.createElement('div');
+    d.className = 'input-group';
+    d.innerHTML = `<label class="input-label" for="${id}">${label}</label>`;
+    const sel = document.createElement('select');
+    sel.className = 'input'; sel.id = id;
+    options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = typeof o === 'string' ? o : o.value;
+        opt.textContent = typeof o === 'string' ? o : o.label;
+        if (opt.value === value) opt.selected = true;
+        sel.appendChild(opt);
     });
-    return group;
+    d.appendChild(sel);
+    return d;
 }
 
-export function createProgressRing({ value, max, label, sublabel }) {
-    const pct = Math.min(value / max, 1);
-    const r = 50;
-    const c = 2 * Math.PI * r;
-    const offset = c * (1 - pct);
-
-    const container = document.createElement('div');
-    container.className = 'progress-ring-container';
-    container.innerHTML = `
-    <div class="progress-ring">
-      <svg width="120" height="120" viewBox="0 0 120 120">
-        <circle class="bg" cx="60" cy="60" r="${r}" />
-        <circle class="fg" cx="60" cy="60" r="${r}"
-          stroke-dasharray="${c}"
-          stroke-dashoffset="${offset}" />
-      </svg>
-      <div class="value">
-        <span>${label}</span>
-        <small>${sublabel}</small>
-      </div>
-    </div>
-  `;
-    return container;
+export function createChips({ options, selected, onChange }) {
+    const d = document.createElement('div');
+    d.className = 'chip-group';
+    options.forEach(o => {
+        const chip = document.createElement('button');
+        chip.className = 'chip' + (o.value === selected ? ' active' : '');
+        chip.textContent = o.label;
+        chip.addEventListener('click', () => {
+            d.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            if (onChange) onChange(o.value);
+        });
+        d.appendChild(chip);
+    });
+    return d;
 }
 
-export function createModal({ title, content, onClose }) {
+export function showModal({ title, content, onClose }) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-    <div class="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-title">${title}</div>
-      <div class="modal-body"></div>
-    </div>
-  `;
-    const body = overlay.querySelector('.modal-body');
-    if (typeof content === 'string') {
-        body.innerHTML = content;
-    } else if (content instanceof HTMLElement) {
-        body.appendChild(content);
-    }
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            overlay.remove();
-            if (onClose) onClose();
-        }
-    });
+    overlay.innerHTML = `<div class="modal"><div class="modal-handle"></div><div class="modal-title">${title}</div><div class="modal-body"></div></div>`;
+    overlay.querySelector('.modal-body').appendChild(content);
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); if (onClose) onClose(); } });
     document.body.appendChild(overlay);
     return overlay;
 }
 
-export function formatDate(dateStr) {
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+export function formatDate(d) {
+    const date = typeof d === 'string' ? new Date(d + 'T12:00:00') : d;
+    return date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export function formatDateShort(dateStr) {
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
+export function today() { return new Date().toISOString().split('T')[0]; }
+export function nowTime() { return new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+
+export function formatTimer(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+export const SESSION_TYPES = [
+    { value: 'tren_inferior', label: '🦵 Tren Inferior' },
+    { value: 'tren_superior', label: '💪 Tren Superior' },
+    { value: 'full_body', label: '🏋️ Full Body' },
+    { value: 'movilidad', label: '🧘 Movilidad' },
+    { value: 'cardio', label: '🏃 Cardio' },
+    { value: 'otro', label: '📋 Otro' },
+];
+
+export function sessionTypeLabel(t) {
+    return SESSION_TYPES.find(s => s.value === t)?.label || t;
 }
 
-export function nowTime() {
-    return new Date().toTimeString().slice(0, 5);
-}
+export const CATEGORIES = [
+    { value: 'pierna', label: '🦵 Pierna' }, { value: 'espalda', label: '🔙 Espalda' },
+    { value: 'pecho', label: '💪 Pecho' }, { value: 'hombro', label: '🏋️ Hombro' },
+    { value: 'core', label: '🎯 Core' }, { value: 'movilidad', label: '🧘 Movilidad' },
+    { value: 'cardio', label: '🏃 Cardio' }, { value: 'otro', label: '📋 Otro' },
+];

@@ -1,178 +1,98 @@
-// Measurements & Progress Screen
-import { saveMedicion, getAllMediciones } from '../db/operations.js';
-import { createInputGroup, createTextarea, showToast, todayISO, formatDateShort } from '../components/ui.js';
+// Measurements Screen
+import { saveMeasurement, getMeasurements } from '../db/supabase.js';
+import { showToast, today, createInput, formatDate } from '../components/ui.js';
 import { navigate } from '../router.js';
-
-let Chart;
-
-async function loadChart() {
-    if (!Chart) {
-        const module = await import('chart.js/auto');
-        Chart = module.default || module.Chart;
-    }
-    return Chart;
-}
+import Chart from 'chart.js/auto';
 
 export async function renderMeasurements() {
-    const screen = document.createElement('div');
-    screen.className = 'screen';
-
-    screen.innerHTML = `
+    const s = document.createElement('div');
+    s.className = 'screen';
+    s.innerHTML = `
     <div class="header-bar">
-      <button class="back-btn" id="back-btn">←</button>
-      <span class="header-title">Mediciones</span>
-    </div>
-    <div class="tab-bar">
-      <button class="tab active" data-tab="registrar">Registrar</button>
-      <button class="tab" data-tab="graficas">Gráficas</button>
-    </div>
-    <div id="meas-tab-content"></div>
-  `;
+      <button class="back-btn" id="back">←</button>
+      <span class="header-title">Medidas Corporales</span>
+    </div>`;
+    s.querySelector('#back').onclick = () => navigate('/');
 
-    screen.querySelector('#back-btn').addEventListener('click', () => navigate('/'));
-    const tabContent = screen.querySelector('#meas-tab-content');
-
-    function switchTab(tab) {
-        screen.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-        if (tab === 'registrar') renderMeasForm(tabContent);
-        else renderMeasCharts(tabContent);
-    }
-
-    screen.querySelectorAll('.tab').forEach(t => {
-        t.addEventListener('click', () => switchTab(t.dataset.tab));
-    });
-
-    switchTab('registrar');
-    return screen;
-}
-
-async function renderMeasForm(container) {
-    container.innerHTML = '';
+    // Form
     const form = document.createElement('div');
-
-    form.appendChild(createInputGroup({ label: 'Fecha', type: 'date', id: 'med-fecha', value: todayISO() }));
-    form.appendChild(createInputGroup({ label: 'Peso (kg)', type: 'number', id: 'med-peso', placeholder: '0', min: 0, step: '0.1' }));
-    form.appendChild(createInputGroup({ label: 'Cintura (cm)', type: 'number', id: 'med-cintura', placeholder: '0', min: 0, step: '0.5' }));
-    form.appendChild(createInputGroup({ label: 'Cadera (cm)', type: 'number', id: 'med-cadera', placeholder: '0', min: 0, step: '0.5' }));
-    form.appendChild(createTextarea({ label: 'Notas', id: 'med-notas', placeholder: 'Ej: foto tomada, cambio de rutina...' }));
+    form.className = 'card';
+    form.innerHTML = '<h3 class="section-title">📏 Nueva Medición</h3>';
+    form.appendChild(createInput({ label: 'Fecha', type: 'date', id: 'bm-date', value: today() }));
+    form.appendChild(createInput({ label: 'Peso (kg)', type: 'number', id: 'bm-peso', step: '0.1', min: 0 }));
+    form.appendChild(createInput({ label: 'Cintura (cm)', type: 'number', id: 'bm-cintura', step: '0.1', min: 0 }));
+    form.appendChild(createInput({ label: 'Cadera (cm)', type: 'number', id: 'bm-cadera', step: '0.1', min: 0 }));
+    form.appendChild(createInput({ label: 'Notas', type: 'textarea', id: 'bm-notas' }));
 
     const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn btn-primary btn-block btn-lg mt-lg';
-    saveBtn.textContent = '💾 Guardar Medición';
-    saveBtn.addEventListener('click', async () => {
-        await saveMedicion({
-            fecha: form.querySelector('#med-fecha').value,
-            peso_kg: parseFloat(form.querySelector('#med-peso').value) || 0,
-            cintura_cm: parseFloat(form.querySelector('#med-cintura').value) || 0,
-            cadera_cm: parseFloat(form.querySelector('#med-cadera').value) || 0,
-            notas: form.querySelector('#med-notas').value
-        });
-        showToast('✅ Medición guardada');
-    });
+    saveBtn.className = 'btn btn-primary btn-block';
+    saveBtn.textContent = '💾 Guardar';
+    saveBtn.onclick = async () => {
+        try {
+            await saveMeasurement({
+                fecha: s.querySelector('#bm-date').value || today(),
+                peso_kg: parseFloat(s.querySelector('#bm-peso').value) || null,
+                cintura_cm: parseFloat(s.querySelector('#bm-cintura').value) || null,
+                cadera_cm: parseFloat(s.querySelector('#bm-cadera').value) || null,
+                notas: s.querySelector('#bm-notas').value || null,
+            });
+            showToast('✅ Medición guardada');
+            await loadData();
+        } catch (e) { showToast('❌ ' + e.message); }
+    };
     form.appendChild(saveBtn);
+    s.appendChild(form);
+
+    // Chart
+    const chartCard = document.createElement('div');
+    chartCard.className = 'card';
+    chartCard.innerHTML = '<h3 class="section-title">📈 Progreso</h3><canvas id="bm-chart" height="200"></canvas>';
+    s.appendChild(chartCard);
 
     // History
-    const all = (await getAllMediciones()).sort((a, b) => b.fecha.localeCompare(a.fecha));
-    if (all.length > 0) {
-        const histLabel = document.createElement('p');
-        histLabel.className = 'section-label mt-xl';
-        histLabel.textContent = 'Historial';
-        form.appendChild(histLabel);
+    const histEl = document.createElement('div');
+    s.appendChild(histEl);
 
-        for (const m of all.slice(0, 12)) {
-            const item = document.createElement('div');
-            item.className = 'card';
-            item.innerHTML = `
-        <span class="font-bold">${formatDateShort(m.fecha)}</span>
-        <div class="flex gap-lg mt-sm">
-          ${m.peso_kg ? `<div><span class="text-xs text-secondary">Peso</span><br><span class="font-bold">${m.peso_kg} kg</span></div>` : ''}
-          ${m.cintura_cm ? `<div><span class="text-xs text-secondary">Cintura</span><br><span class="font-bold">${m.cintura_cm} cm</span></div>` : ''}
-          ${m.cadera_cm ? `<div><span class="text-xs text-secondary">Cadera</span><br><span class="font-bold">${m.cadera_cm} cm</span></div>` : ''}
-        </div>
-        ${m.notas ? `<p class="text-xs text-secondary mt-sm">${m.notas}</p>` : ''}
-      `;
-            form.appendChild(item);
+    let chart = null;
+
+    async function loadData() {
+        const data = await getMeasurements(30);
+        const sorted = [...data].reverse();
+
+        // Chart
+        if (chart) chart.destroy();
+        const ctx = s.querySelector('#bm-chart');
+        if (ctx && sorted.length > 0) {
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sorted.map(d => d.fecha.slice(5)),
+                    datasets: [
+                        { label: 'Peso (kg)', data: sorted.map(d => d.peso_kg), borderColor: '#00d4aa', tension: 0.3, fill: false },
+                        { label: 'Cintura (cm)', data: sorted.map(d => d.cintura_cm), borderColor: '#7c5cfc', tension: 0.3, fill: false },
+                        { label: 'Cadera (cm)', data: sorted.map(d => d.cadera_cm), borderColor: '#ff9f43', tension: 0.3, fill: false },
+                    ]
+                },
+                options: {
+                    responsive: true, plugins: { legend: { labels: { color: '#8888a8', font: { size: 11 } } } },
+                    scales: { x: { ticks: { color: '#555570' }, grid: { color: 'rgba(255,255,255,0.04)' } }, y: { ticks: { color: '#555570' }, grid: { color: 'rgba(255,255,255,0.04)' } } }
+                }
+            });
+        }
+
+        // History
+        histEl.innerHTML = '';
+        if (data.length > 0) {
+            const label = document.createElement('div'); label.className = 'section-label mt-lg'; label.textContent = 'Historial'; histEl.appendChild(label);
+            data.forEach(m => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `<div class="list-item-body"><div class="list-item-title">${formatDate(m.fecha)}</div><div class="list-item-sub">${m.peso_kg ? m.peso_kg + 'kg' : ''} ${m.cintura_cm ? '• ' + m.cintura_cm + 'cm cin' : ''} ${m.cadera_cm ? '• ' + m.cadera_cm + 'cm cad' : ''}</div></div>`;
+                histEl.appendChild(item);
+            });
         }
     }
 
-    container.appendChild(form);
-}
-
-async function renderMeasCharts(container) {
-    container.innerHTML = '';
-    const ChartJS = await loadChart();
-    const all = (await getAllMediciones()).sort((a, b) => a.fecha.localeCompare(b.fecha));
-
-    if (all.length < 2) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p class="empty-state-text">Necesitas al menos 2 mediciones para ver gráficas</p></div>';
-        return;
-    }
-
-    const labels = all.map(m => formatDateShort(m.fecha));
-    const chartDefaults = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-            x: { ticks: { color: '#8888a8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-            y: { ticks: { color: '#8888a8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } }
-        }
-    };
-
-    // Weight chart
-    if (all.some(m => m.peso_kg > 0)) {
-        const weightSection = document.createElement('div');
-        weightSection.className = 'chart-container';
-        weightSection.innerHTML = '<h4 class="section-title">Peso (kg)</h4><div style="height:180px"><canvas id="chart-peso"></canvas></div>';
-        container.appendChild(weightSection);
-
-        setTimeout(() => {
-            new ChartJS(document.getElementById('chart-peso'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{ data: all.map(m => m.peso_kg || null), borderColor: '#00d4aa', backgroundColor: 'rgba(0,212,170,0.1)', tension: 0.3, fill: true, pointRadius: 4, pointBackgroundColor: '#00d4aa' }]
-                },
-                options: chartDefaults
-            });
-        }, 50);
-    }
-
-    // Waist chart
-    if (all.some(m => m.cintura_cm > 0)) {
-        const waistSection = document.createElement('div');
-        waistSection.className = 'chart-container';
-        waistSection.innerHTML = '<h4 class="section-title">Cintura (cm)</h4><div style="height:180px"><canvas id="chart-cintura"></canvas></div>';
-        container.appendChild(waistSection);
-
-        setTimeout(() => {
-            new ChartJS(document.getElementById('chart-cintura'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{ data: all.map(m => m.cintura_cm || null), borderColor: '#7c5cfc', backgroundColor: 'rgba(124,92,252,0.1)', tension: 0.3, fill: true, pointRadius: 4, pointBackgroundColor: '#7c5cfc' }]
-                },
-                options: chartDefaults
-            });
-        }, 100);
-    }
-
-    // Hip chart
-    if (all.some(m => m.cadera_cm > 0)) {
-        const hipSection = document.createElement('div');
-        hipSection.className = 'chart-container';
-        hipSection.innerHTML = '<h4 class="section-title">Cadera (cm)</h4><div style="height:180px"><canvas id="chart-cadera"></canvas></div>';
-        container.appendChild(hipSection);
-
-        setTimeout(() => {
-            new ChartJS(document.getElementById('chart-cadera'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{ data: all.map(m => m.cadera_cm || null), borderColor: '#ff9f43', backgroundColor: 'rgba(255,159,67,0.1)', tension: 0.3, fill: true, pointRadius: 4, pointBackgroundColor: '#ff9f43' }]
-                },
-                options: chartDefaults
-            });
-        }, 150);
-    }
+    await loadData();
+    return s;
 }

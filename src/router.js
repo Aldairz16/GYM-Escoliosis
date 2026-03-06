@@ -1,43 +1,50 @@
 // Simple hash-based SPA router
 const routes = {};
-let currentRoute = null;
 let contentEl = null;
 
-export function registerRoute(path, renderFn) {
-    routes[path] = renderFn;
-}
+export function registerRoute(path, handler) { routes[path] = handler; }
 
 export function navigate(path) {
     window.location.hash = path;
 }
 
-export function getCurrentRoute() {
-    return currentRoute;
+export function currentPath() {
+    return window.location.hash.slice(1) || '/';
 }
 
-export function initRouter(containerEl) {
-    contentEl = containerEl;
-
-    const handleRoute = async () => {
-        const hash = window.location.hash.slice(1) || '/';
-        currentRoute = hash;
-        const renderFn = routes[hash];
-        if (renderFn) {
-            contentEl.innerHTML = '';
-            const screen = await renderFn();
-            if (typeof screen === 'string') {
-                contentEl.innerHTML = screen;
-            } else if (screen instanceof HTMLElement) {
-                contentEl.appendChild(screen);
-            }
-            // Update nav active state
-            document.querySelectorAll('.nav-item').forEach(item => {
-                const route = item.dataset.route;
-                item.classList.toggle('active', hash.startsWith(route));
-            });
-        }
-    };
-
+export function initRouter(container) {
+    contentEl = container;
     window.addEventListener('hashchange', handleRoute);
     handleRoute();
+}
+
+async function handleRoute() {
+    const path = currentPath();
+    const handler = routes[path];
+    if (!handler || !contentEl) return;
+
+    contentEl.innerHTML = '';
+    try {
+        const screen = await handler();
+        if (screen instanceof HTMLElement) {
+            contentEl.appendChild(screen);
+        }
+    } catch (e) {
+        console.error('Route error:', e);
+        contentEl.innerHTML = `<div class="screen"><p class="text-danger">Error: ${e.message}</p></div>`;
+    }
+
+    // Update nav active states
+    document.querySelectorAll('.nav-item, .sidebar-item').forEach(item => {
+        const href = item.dataset.route;
+        if (href === path || (path.startsWith(href) && href !== '/')) {
+            item.classList.add('active');
+        } else if (href === '/' && path === '/') {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+
+    window.scrollTo(0, 0);
 }
