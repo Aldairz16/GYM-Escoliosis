@@ -1172,7 +1172,7 @@ input[type="range"]::-moz-range-thumb {
     text-align: center;
     font-size: var(--fs-xs);
     color: var(--text-muted);
-    margin-bottom: var(--sp-sm);
+    margin-bottom: var(--sp-xs);
     font-weight: 600;
 }
 
@@ -1180,10 +1180,10 @@ input[type="range"]::-moz-range-thumb {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 2px;
+    width: 100%;
 }
 
 .cal-day {
-    aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1192,6 +1192,9 @@ input[type="range"]::-moz-range-thumb {
     cursor: pointer;
     transition: all var(--trans);
     color: var(--text-secondary);
+    height: 40px;
+    width: 100%;
+    min-width: 0;
 }
 
 .cal-day:hover {
@@ -1201,6 +1204,7 @@ input[type="range"]::-moz-range-thumb {
 .cal-day.today {
     font-weight: 700;
     color: var(--text-primary);
+    border: 2px solid var(--accent);
 }
 
 .cal-day.has-workout {
@@ -1223,9 +1227,4 @@ input[type="range"]::-moz-range-thumb {
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--sp-md);
-}
-
-.cal-month {
-    font-size: var(--fs-md);
-    font-weight: 700;
 }
