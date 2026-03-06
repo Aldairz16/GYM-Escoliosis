@@ -53,6 +53,17 @@ async function startApp() {
 
   initRouter(content);
 
+  // Auto-resume active workout if one exists
+  const activeSession = localStorage.getItem('activeSession');
+  if (activeSession) {
+    try {
+      const sess = JSON.parse(activeSession);
+      if (sess && sess.id && !sess.completada) {
+        window.location.hash = '/workout/active';
+      }
+    } catch (e) { localStorage.removeItem('activeSession'); }
+  }
+
   // Service worker
   if ('serviceWorker' in navigator) {
     try { await navigator.serviceWorker.register('/sw.js'); } catch (e) { /* ok */ }

@@ -11,12 +11,12 @@ export async function renderActiveWorkout() {
     const s = document.createElement('div');
     s.className = 'screen';
 
-    const sessionData = JSON.parse(sessionStorage.getItem('activeSession') || 'null');
+    const sessionData = JSON.parse(localStorage.getItem('activeSession') || 'null');
     if (!sessionData) { navigate('/workout'); return s; }
 
     const allExercises = await getExercises();
     let sessionSets = await getSessionSets(sessionData.id);
-    const routineExs = JSON.parse(sessionStorage.getItem('routineExercises') || '[]');
+    const routineExs = JSON.parse(localStorage.getItem('routineExercises') || '[]');
     let restTime = await getConfig('rest_timer', 60);
     const sessionStart = sessionData.hora_inicio || null;
 
@@ -53,7 +53,7 @@ export async function renderActiveWorkout() {
                 sessionSets.push(newSet);
             }
         }
-        sessionStorage.removeItem('routineExercises');
+        localStorage.removeItem('routineExercises');
     }
 
     // Calculate elapsed seconds
@@ -94,8 +94,8 @@ export async function renderActiveWorkout() {
             if (confirm('¿Salir del entrenamiento?\n\n• "Aceptar" = guardar progreso y salir\n• "Cancelar" = seguir entrenando')) {
                 if (sessionTimerInterval) clearInterval(sessionTimerInterval);
                 // Don't delete — just leave (user can continue from history)
-                sessionStorage.removeItem('activeSession');
-                sessionStorage.removeItem('routineExercises');
+                localStorage.removeItem('activeSession');
+                localStorage.removeItem('routineExercises');
                 navigate('/');
             }
         };
@@ -275,8 +275,8 @@ export async function renderActiveWorkout() {
             if (confirm('¿Eliminar esta sesión por completo?')) {
                 if (sessionTimerInterval) clearInterval(sessionTimerInterval);
                 await deleteSession(sessionData.id);
-                sessionStorage.removeItem('activeSession');
-                sessionStorage.removeItem('routineExercises');
+                localStorage.removeItem('activeSession');
+                localStorage.removeItem('routineExercises');
                 showToast('Sesión eliminada');
                 navigate('/');
             }
@@ -381,8 +381,8 @@ export async function renderActiveWorkout() {
                 rpe, dolor_espalda_durante: dolor, notas,
                 completada: true
             });
-            sessionStorage.removeItem('activeSession');
-            sessionStorage.removeItem('routineExercises');
+            localStorage.removeItem('activeSession');
+            localStorage.removeItem('routineExercises');
             document.querySelector('.modal-overlay')?.remove();
             showToast('✅ ¡Entrenamiento guardado!');
             navigate('/');

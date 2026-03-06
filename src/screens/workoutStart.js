@@ -50,11 +50,11 @@ export async function renderWorkoutStart() {
                 rutina_id: selectedRoutine, completada: false
             });
             // Store active session ID
-            sessionStorage.setItem('activeSession', JSON.stringify(session));
+            localStorage.setItem('activeSession', JSON.stringify(session));
             // If routine selected, pre-load exercises
             if (selectedRoutine) {
                 const rExs = await getRoutineExercises(selectedRoutine);
-                sessionStorage.setItem('routineExercises', JSON.stringify(rExs));
+                localStorage.setItem('routineExercises', JSON.stringify(rExs));
             }
             navigate('/workout/active');
         } catch (e) {
