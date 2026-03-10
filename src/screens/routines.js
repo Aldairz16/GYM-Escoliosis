@@ -108,7 +108,7 @@ export async function renderRoutines() {
                     optM.innerHTML = `
                         <div class="input-group mb-sm"><label class="input-label">Series</label><input type="number" class="input" id="opt-sets" value="${re.series_sugeridas || 3}"></div>
                         <div class="input-group mb-sm"><label class="input-label">Reps / Segundos</label><input type="number" class="input" id="opt-reps" value="${ex?.es_resistencia ? (re.duracion_objetivo_seg || 30) : (re.reps_sugeridas || 10)}"></div>
-                        <div class="input-group mb-sm"><label class="input-label">Peso Objetivo (kg)</label><input type="number" step="0.5" class="input" id="opt-weight" value="${re.peso_objetivo_kg || ''}"></div>
+                        <div class="input-group mb-sm"><label class="input-label">Peso Objetivo (kg)</label><input type="text" inputmode="decimal" class="input" id="opt-weight" value="${re.peso_objetivo_kg || ''}"></div>
                         <div class="input-group mb-sm"><label class="input-label">Descanso (seg)</label><input type="number" class="input" id="opt-rest" value="${re.descanso_seg || ''}" placeholder="Ej: 90"></div>
                         <div class="input-group mb-sm"><label class="input-label">Notas</label><input type="text" class="input" id="opt-notes" value="${re.notas || ''}"></div>
                         <label class="flex items-center gap-sm mt-md mb-md text-sm cursor-pointer"><input type="checkbox" id="opt-superset" ${re.superset_id ? 'checked' : ''}> Vincular al anterior (Superset)</label>
@@ -122,7 +122,7 @@ export async function renderRoutines() {
                         } else {
                             re.reps_sugeridas = parseInt(optM.querySelector('#opt-reps').value) || 10;
                         }
-                        re.peso_objetivo_kg = parseFloat(optM.querySelector('#opt-weight').value) || null;
+                        re.peso_objetivo_kg = parseFloat(optM.querySelector('#opt-weight').value.replace(',', '.')) || null;
                         re.descanso_seg = parseInt(optM.querySelector('#opt-rest').value) || null;
                         re.notas = optM.querySelector('#opt-notes').value || null;
                         re.superset_id = optM.querySelector('#opt-superset').checked ? (idx > 0 ? (routineExs[idx - 1].superset_id || 'ss_' + idx) : null) : null;

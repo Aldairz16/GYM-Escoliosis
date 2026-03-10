@@ -302,15 +302,24 @@ export async function renderActiveWorkout() {
                 // Weight / Duration input
                 const inp1 = document.createElement('input');
                 inp1.className = 'set-input';
-                inp1.type = 'number';
+                inp1.type = g.isResistance ? 'number' : 'text';
                 inp1.inputMode = 'decimal';
-                inp1.step = g.isResistance ? '1' : '0.5';
+                if (g.isResistance) inp1.step = '1';
                 inp1.value = g.isResistance ? (set.duracion_seg || '') : (set.peso_kg || '');
                 inp1.placeholder = g.isResistance ? 'seg' : weightUnit;
                 inp1.onchange = () => {
-                    const val = parseFloat(inp1.value) || 0;
-                    updateSet(set.id, g.isResistance ? { duracion_seg: val } : { peso_kg: val });
-                    set[g.isResistance ? 'duracion_seg' : 'peso_kg'] = val;
+                    let val = 0;
+                    if (g.isResistance) {
+                        val = parseInt(inp1.value) || 0;
+                        updateSet(set.id, { duracion_seg: val });
+                        set.duracion_seg = val;
+                    } else {
+                        val = parseFloat(inp1.value.replace(',', '.')) || 0;
+                        // Format back to dot
+                        inp1.value = val !== 0 ? val : '';
+                        updateSet(set.id, { peso_kg: val });
+                        set.peso_kg = val;
+                    }
                 };
                 row.appendChild(inp1);
 

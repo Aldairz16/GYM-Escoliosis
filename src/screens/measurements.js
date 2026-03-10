@@ -19,9 +19,15 @@ export async function renderMeasurements() {
     form.className = 'card';
     form.innerHTML = '<h3 class="section-title">📏 Nueva Medición</h3>';
     form.appendChild(createInput({ label: 'Fecha', type: 'date', id: 'bm-date', value: today() }));
-    form.appendChild(createInput({ label: 'Peso (kg)', type: 'number', id: 'bm-peso', step: '0.1', min: 0 }));
-    form.appendChild(createInput({ label: 'Cintura (cm)', type: 'number', id: 'bm-cintura', step: '0.1', min: 0 }));
-    form.appendChild(createInput({ label: 'Cadera (cm)', type: 'number', id: 'bm-cadera', step: '0.1', min: 0 }));
+    form.appendChild(createInput({ label: 'Peso (kg)', type: 'text', id: 'bm-peso', step: '0.1', min: 0 }));
+    // Modify input attributes specifically for the generated inputs to support decimal mode well on mobile
+    form.querySelector('#bm-peso').inputMode = 'decimal';
+
+    form.appendChild(createInput({ label: 'Cintura (cm)', type: 'text', id: 'bm-cintura', step: '0.1', min: 0 }));
+    form.querySelector('#bm-cintura').inputMode = 'decimal';
+
+    form.appendChild(createInput({ label: 'Cadera (cm)', type: 'text', id: 'bm-cadera', step: '0.1', min: 0 }));
+    form.querySelector('#bm-cadera').inputMode = 'decimal';
     form.appendChild(createInput({ label: 'Notas', type: 'textarea', id: 'bm-notas' }));
 
     const saveBtn = document.createElement('button');
@@ -31,9 +37,9 @@ export async function renderMeasurements() {
         try {
             await saveMeasurement({
                 fecha: s.querySelector('#bm-date').value || today(),
-                peso_kg: parseFloat(s.querySelector('#bm-peso').value) || null,
-                cintura_cm: parseFloat(s.querySelector('#bm-cintura').value) || null,
-                cadera_cm: parseFloat(s.querySelector('#bm-cadera').value) || null,
+                peso_kg: parseFloat(s.querySelector('#bm-peso').value.replace(',', '.')) || null,
+                cintura_cm: parseFloat(s.querySelector('#bm-cintura').value.replace(',', '.')) || null,
+                cadera_cm: parseFloat(s.querySelector('#bm-cadera').value.replace(',', '.')) || null,
                 notas: s.querySelector('#bm-notas').value || null,
             });
             showToast('✅ Medición guardada');

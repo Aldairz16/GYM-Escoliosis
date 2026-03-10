@@ -1,6 +1,6 @@
 // Daily Log Screen
-import { getDailyLog, saveDailyLog, getDailyLogs, deleteDailyLog } from '../db/supabase.js';
-import { showToast, today, createSlider, createInput, formatDate } from '../components/ui.js';
+import { getDailyLog, saveDailyLog, getDailyLogs, deleteDailyLog, getSupplementLogs, addSupplementLog } from '../db/supabase.js';
+import { showToast, showModal, today, createSlider, createInput, formatDate } from '../components/ui.js';
 import { navigate } from '../router.js';
 
 export async function renderDaily() {
@@ -24,6 +24,16 @@ export async function renderDaily() {
 
     const formEl = document.createElement('div');
     s.appendChild(formEl);
+
+    // Supplements section
+    const suppSection = document.createElement('div');
+    suppSection.className = 'card mt-lg';
+    suppSection.innerHTML = `
+        <h3 class="section-title">💊 Suplementos</h3>
+        <div id="supp-list" class="mb-md text-sm"></div>
+        <button class="btn btn-secondary btn-sm btn-block" id="add-supp-btn">+ Añadir Toma</button>
+    `;
+    s.appendChild(suppSection);
 
     // History section
     const historySection = document.createElement('div');
@@ -76,7 +86,64 @@ export async function renderDaily() {
         energia = log?.energia_fin_dia ?? 5;
         notas = log?.notas || '';
         renderForm();
+        await loadSupplements();
     }
+
+    async function loadSupplements() {
+        const listEl = suppSection.querySelector('#supp-list');
+        listEl.innerHTML = '<div class="text-secondary text-xs">Cargando...</div>';
+        try {
+            const supps = await getSupplementLogs(fecha);
+            if (!supps || supps.length === 0) {
+                listEl.innerHTML = '<div class="text-secondary text-xs mt-sm mb-sm text-center">No has registrado suplementos este día.</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            supps.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center py-xs border-b border-light';
+                item.innerHTML = `
+                    <div>
+                        <strong style="color:var(--text)">${s.nombre_suplemento}</strong>
+                        <span class="text-xs text-secondary ml-sm">${s.cantidad} ${s.unidad}</span>
+                    </div>
+                    <div class="text-xs text-secondary">${s.hora.slice(0, 5)}</div>
+                `;
+                listEl.appendChild(item);
+            });
+        } catch (e) {
+            listEl.innerHTML = '<div class="text-danger">Error al cargar</div>';
+        }
+    }
+
+    suppSection.querySelector('#add-supp-btn').onclick = () => {
+        const m = document.createElement('div');
+        m.innerHTML = `
+            <div class="input-group mb-sm"><label class="input-label">Suplemento</label><input type="text" class="input" id="s-name" placeholder="Ej: Proteína Whey, Creatina..."></div>
+            <div class="flex gap-sm mb-sm">
+                <div class="input-group" style="flex:1"><label class="input-label">Cantidad</label><input type="number" step="0.5" class="input" id="s-qty" value="1"></div>
+                <div class="input-group" style="flex:1"><label class="input-label">Unidad</label><input type="text" class="input" id="s-unit" value="scoop"></div>
+            </div>
+            <div class="input-group mb-lg"><label class="input-label">Hora</label><input type="time" class="input" id="s-time" value="${new Date().toTimeString().slice(0, 5)}"></div>
+            <button class="btn btn-primary btn-block" id="s-save">Guardar Toma</button>
+        `;
+        m.querySelector('#s-save').onclick = async () => {
+            const nombre = m.querySelector('#s-name').value;
+            const cantidad = parseFloat(m.querySelector('#s-qty').value) || 1;
+            const unidad = m.querySelector('#s-unit').value || '';
+            const hora = m.querySelector('#s-time').value;
+
+            if (!nombre) return showToast('Agrega un nombre');
+
+            try {
+                await addSupplementLog({ fecha, hora, nombre_suplemento: nombre, cantidad, unidad });
+                showToast('💊 Suplemento registrado');
+                document.querySelector('.modal-overlay')?.remove();
+                loadSupplements();
+            } catch (e) { showToast('❌ Error al guardar'); }
+        };
+        showModal({ title: 'Registrar Suplemento', content: m });
+    };
 
     function renderForm() {
         formEl.innerHTML = '';

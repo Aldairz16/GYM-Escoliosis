@@ -303,25 +303,6 @@ export async function getDailyLogs(from, to) {
     return data || [];
 }
 
-// ==================== Sleep Logs ====================
-export async function saveSleepLog(log) {
-    const uid = await getUserId();
-    const { data, error } = await supabase.from('sleep_logs')
-        .upsert({ ...log, user_id: uid }, { onConflict: 'user_id,fecha_noche' }).select().single();
-    if (error) throw error;
-    return data;
-}
-
-export async function getSleepLogs(from, to) {
-    const uid = await getUserId();
-    let q = supabase.from('sleep_logs').select('*').eq('user_id', uid).order('fecha_noche', { ascending: false });
-    if (from) q = q.gte('fecha_noche', from);
-    if (to) q = q.lte('fecha_noche', to);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data || [];
-}
-
 // ==================== Body Measurements ====================
 export async function saveMeasurement(m) {
     const uid = await getUserId();
@@ -382,15 +363,14 @@ export async function exportData(from, to) {
         if (to) q = q.lte('fecha', to);
         return q;
     };
-    const [sessions, sets, daily, measurements, sleep, supplements] = await Promise.all([
+    const [sessions, sets, daily, measurements, supplements] = await Promise.all([
         range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         supabase.from('workout_sets').select('*, workout_sessions!inner(user_id,fecha)').eq('workout_sessions.user_id', uid).order('session_id').then(r => r.data || []),
         range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        supabase.from('sleep_logs').select('*').eq('user_id', uid).order('fecha_noche').then(r => r.data || []),
         supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha').then(r => r.data || []),
     ]);
-    return { sessions, sets, daily, measurements, sleep, supplements };
+    return { sessions, sets, daily, measurements, supplements };
 }
 
 export function toCSV(data, columns) {
