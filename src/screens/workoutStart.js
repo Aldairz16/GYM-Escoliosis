@@ -33,6 +33,17 @@ export async function renderWorkoutStart() {
         routineGroup.innerHTML = `<label class="input-label">Rutina predefinida (opcional)</label><select class="input" id="ws-routine"><option value="">— Sin rutina —</option>${routines.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('')}</select>`;
         routineGroup.querySelector('select').onchange = e => {
             selectedRoutine = e.target.value ? +e.target.value : null;
+            if (selectedRoutine) {
+                const r = routines.find(x => x.id === selectedRoutine);
+                if (r && r.tipo_sesion) {
+                    tipo = r.tipo_sesion;
+                    // Re-render chips
+                    const typeLabelNode = s.querySelector('.section-label');
+                    const oldChips = typeLabelNode.nextElementSibling;
+                    const newChips = createChips({ options: SESSION_TYPES, selected: tipo, onChange: v => { tipo = v; } });
+                    s.replaceChild(newChips, oldChips);
+                }
+            }
         };
         s.appendChild(routineGroup);
     }

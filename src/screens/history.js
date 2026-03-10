@@ -113,9 +113,46 @@ export async function renderHistory() {
               ${sets.length > 0 ? `<div class="text-xs text-muted">${sets.length} series total</div>` : ''}
               ${sess.notas ? `<div class="text-xs text-secondary mt-sm">📝 ${sess.notas}</div>` : ''}
               <div class="flex gap-sm mt-md">
+                <button class="btn btn-ghost btn-sm convert-btn text-accent">⭐️ Crear Rutina</button>
                 <button class="btn btn-ghost btn-sm del-btn">🗑 Borrar</button>
               </div>
             `;
+
+            card.querySelector('.convert-btn').onclick = async (e) => {
+                e.stopPropagation();
+                try {
+                    const { createRoutine, setRoutineExercises } = await import('../db/supabase.js');
+                    const numRoutine = Math.floor(Math.random() * 1000);
+                    const newR = await createRoutine({ nombre: `Rutina basada en ${formatDate(date)}`, tipo_sesion: sess.tipo_sesion, notas: 'Importada del historial' });
+
+                    const existingExs = [];
+                    const finalRoutineRows = [];
+                    sets.forEach(s => {
+                        const exId = s.exercise_id;
+                        if (!existingExs.includes(exId)) {
+                            existingExs.push(exId);
+                            const exSets = sets.filter(os => os.exercise_id === exId);
+                            finalRoutineRows.push({
+                                exercise_id: exId,
+                                series_sugeridas: exSets.length,
+                                reps_sugeridas: Math.max(...exSets.map(x => x.repeticiones || 0)),
+                                peso_objetivo_kg: Math.max(...exSets.map(x => x.peso_kg || 0)),
+                                duracion_objetivo_seg: exSets[0].duracion_seg || null
+                            });
+                        }
+                    });
+
+                    if (finalRoutineRows.length > 0) {
+                        await setRoutineExercises(newR.id, finalRoutineRows);
+                    }
+
+                    showToast('✅ Rutina creada. Ve a la pestaña Rutinas.');
+                    navigate('/routines');
+                } catch (err) {
+                    showToast('❌ Error: ' + err.message);
+                }
+            };
+
             card.querySelector('.del-btn').onclick = async (e) => {
                 e.stopPropagation();
                 if (confirm('¿Eliminar esta sesión?')) {

@@ -61,7 +61,7 @@ export function parseExerciseImages(urlImagen) {
         if (Array.isArray(parsed)) return parsed;
         return [String(parsed)];
     } catch (e) {
-        return [urlImagen]; // old format: plain URL string
+        return urlImagen ? [urlImagen] : []; // old format: plain URL string
     }
 }
 
@@ -253,7 +253,9 @@ export async function setRoutineExercises(routineId, exercises) {
         orden: i, series_sugeridas: ex.series_sugeridas || 3,
         reps_sugeridas: ex.reps_sugeridas || 10,
         peso_objetivo_kg: ex.peso_objetivo_kg || null,
-        duracion_objetivo_seg: ex.duracion_objetivo_seg || null
+        duracion_objetivo_seg: ex.duracion_objetivo_seg || null,
+        descanso_seg: ex.descanso_seg || null,
+        notas: ex.notas || null
     }));
     const { error } = await supabase.from('routine_exercises').insert(rows);
     if (error) throw error;

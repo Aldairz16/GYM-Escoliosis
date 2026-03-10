@@ -81,8 +81,16 @@ export async function renderRoutines() {
                 row.className = 'list-item';
                 row.innerHTML = `
           <div class="list-item-body">
-            <div class="list-item-title">${ex?.nombre || 'Ejercicio'}</div>
-            <div class="list-item-sub">${re.series_sugeridas || 3}×${re.reps_sugeridas || 10} ${re.peso_objetivo_kg ? re.peso_objetivo_kg + 'kg' : ''}</div>
+            <div class="flex items-center gap-sm">
+                <div class="list-item-title">${ex?.nombre || 'Ejercicio'}</div>
+                <button class="btn btn-ghost btn-sm text-secondary ex-opt-btn" style="padding:0">⚙️</button>
+            </div>
+            <div class="list-item-sub">
+                ${re.series_sugeridas || 3}×${re.reps_sugeridas || 10} ${re.peso_objetivo_kg ? re.peso_objetivo_kg + 'kg' : ''}
+                ${re.descanso_seg ? ` • ⏱ ${re.descanso_seg}s` : ''}
+                ${re.notas ? ` • 📝` : ''}
+                ${re.superset_id ? ` • 🔗 SS` : ''}
+            </div>
           </div>
           <div class="flex gap-sm">
             ${idx > 0 ? `<button class="btn btn-ghost btn-sm up-btn">↑</button>` : ''}
@@ -93,10 +101,47 @@ export async function renderRoutines() {
                 row.querySelector('.rem-btn').onclick = () => { routineExs.splice(idx, 1); renderEditor(); };
                 row.querySelector('.up-btn')?.addEventListener('click', () => { [routineExs[idx - 1], routineExs[idx]] = [routineExs[idx], routineExs[idx - 1]]; renderEditor(); });
                 row.querySelector('.down-btn')?.addEventListener('click', () => { [routineExs[idx], routineExs[idx + 1]] = [routineExs[idx + 1], routineExs[idx]]; renderEditor(); });
+
+                // Exercise options modal (RF-14, 15, 16)
+                row.querySelector('.ex-opt-btn').onclick = () => {
+                    const optM = document.createElement('div');
+                    optM.innerHTML = `
+                        <div class="input-group mb-sm"><label class="input-label">Series</label><input type="number" class="input" id="opt-sets" value="${re.series_sugeridas || 3}"></div>
+                        <div class="input-group mb-sm"><label class="input-label">Reps / Segundos</label><input type="number" class="input" id="opt-reps" value="${ex?.es_resistencia ? (re.duracion_objetivo_seg || 30) : (re.reps_sugeridas || 10)}"></div>
+                        <div class="input-group mb-sm"><label class="input-label">Peso Objetivo (kg)</label><input type="number" step="0.5" class="input" id="opt-weight" value="${re.peso_objetivo_kg || ''}"></div>
+                        <div class="input-group mb-sm"><label class="input-label">Descanso (seg)</label><input type="number" class="input" id="opt-rest" value="${re.descanso_seg || ''}" placeholder="Ej: 90"></div>
+                        <div class="input-group mb-sm"><label class="input-label">Notas</label><input type="text" class="input" id="opt-notes" value="${re.notas || ''}"></div>
+                        <label class="flex items-center gap-sm mt-md mb-md text-sm cursor-pointer"><input type="checkbox" id="opt-superset" ${re.superset_id ? 'checked' : ''}> Vincular al anterior (Superset)</label>
+                        <button class="btn btn-primary btn-block mt-lg" id="opt-save">Guardar Cambios</button>
+                        <button class="btn btn-secondary btn-block mt-sm" id="opt-replace">🔄 Cambiar Ejercicio</button>
+                    `;
+                    optM.querySelector('#opt-save').onclick = () => {
+                        re.series_sugeridas = parseInt(optM.querySelector('#opt-sets').value) || 3;
+                        if (ex?.es_resistencia) {
+                            re.duracion_objetivo_seg = parseInt(optM.querySelector('#opt-reps').value) || 30;
+                        } else {
+                            re.reps_sugeridas = parseInt(optM.querySelector('#opt-reps').value) || 10;
+                        }
+                        re.peso_objetivo_kg = parseFloat(optM.querySelector('#opt-weight').value) || null;
+                        re.descanso_seg = parseInt(optM.querySelector('#opt-rest').value) || null;
+                        re.notas = optM.querySelector('#opt-notes').value || null;
+                        re.superset_id = optM.querySelector('#opt-superset').checked ? (idx > 0 ? (routineExs[idx - 1].superset_id || 'ss_' + idx) : null) : null;
+
+                        document.querySelector('.modal-overlay')?.remove();
+                        renderEditor();
+                    };
+                    optM.querySelector('#opt-replace').onclick = () => {
+                        document.querySelector('.modal-overlay')?.remove();
+                        // open picker to replace
+                        content.querySelector('#add-ex-btn').onclick(idx); // hijack add to replace
+                    };
+                    showModal({ title: 'Configurar Ejercicio', content: optM });
+                };
+
                 exList.appendChild(row);
             });
 
-            content.querySelector('#add-ex-btn').onclick = () => {
+            content.querySelector('#add-ex-btn').onclick = (replaceIdx = null) => {
                 const picker = document.createElement('div');
                 let pickerCat = null;
 
@@ -140,15 +185,21 @@ export async function renderRoutines() {
                         it.dataset.name = ex.nombre.toLowerCase();
                         it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}${ex.es_resistencia ? ' • ⏱ resistencia' : ''}</div></div>`;
                         it.onclick = () => {
-                            routineExs.push({ exercise_id: ex.id, exercises: ex, series_sugeridas: 3, reps_sugeridas: ex.es_resistencia ? null : 10, duracion_objetivo_seg: ex.es_resistencia ? 30 : null });
-                            document.querySelectorAll('.modal-overlay')[1]?.remove();
+                            const newExObj = { exercise_id: ex.id, exercises: ex, series_sugeridas: 3, reps_sugeridas: ex.es_resistencia ? null : 10, duracion_objetivo_seg: ex.es_resistencia ? 30 : null };
+                            if (typeof replaceIdx === 'number') {
+                                routineExs[replaceIdx] = { ...routineExs[replaceIdx], ...newExObj };
+                            } else {
+                                routineExs.push(newExObj);
+                            }
+                            // Using next sibling traversal if multiple modals
+                            document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
                             renderEditor();
                         };
                         picker.appendChild(it);
                     });
                 }
                 renderPicker();
-                showModal({ title: 'Seleccionar Ejercicio', content: picker });
+                showModal({ title: typeof replaceIdx === 'number' ? 'Reemplazar Ejercicio' : 'Seleccionar Ejercicio', content: picker });
             };
 
             content.querySelector('#save-btn').onclick = async () => {
@@ -166,7 +217,9 @@ export async function renderRoutines() {
                     await setRoutineExercises(r.id, routineExs.map(e => ({
                         exercise_id: e.exercise_id, series_sugeridas: e.series_sugeridas || 3,
                         reps_sugeridas: e.reps_sugeridas, peso_objetivo_kg: e.peso_objetivo_kg,
-                        duracion_objetivo_seg: e.duracion_objetivo_seg
+                        duracion_objetivo_seg: e.duracion_objetivo_seg,
+                        descanso_seg: e.descanso_seg || null,
+                        notas: e.notas || null
                     })));
                     document.querySelector('.modal-overlay')?.remove();
                     showToast('✅ Rutina guardada');

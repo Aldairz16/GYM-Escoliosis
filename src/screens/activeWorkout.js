@@ -8,6 +8,8 @@ let maxWeights = {};
 let restInterval = null;
 let resistanceInterval = null;
 let sessionTimerInterval = null;
+let sessionElapsedOffset = 0; // seconds
+let sessionPaused = false;
 
 export async function renderActiveWorkout() {
     const s = document.createElement('div');
@@ -20,22 +22,25 @@ export async function renderActiveWorkout() {
     let sessionSets = await getSessionSets(sessionData.id);
     const routineExs = JSON.parse(localStorage.getItem('routineExercises') || '[]');
     let restTime = await getConfig('rest_timer', 60);
-    const sessionStart = sessionData.hora_inicio || null;
+    const weightUnit = await getConfig('unidad_peso', 'kg');
+    let sessionStart = sessionData.hora_inicio || null;
+    sessionElapsedOffset = sessionData.elapsed_offset || 0;
+    sessionPaused = sessionData.paused || false;
 
     // Helper to add sets (handles unilateral)
-    async function createSetsForExercise(ex, numSets, w = 0, reps = 10, dur = 0) {
+    async function createSetsForExercise(ex, numSets, w = 0, reps = 10, dur = 0, tipoSerie = 'normal', supersetId = null) {
         if (!ex) return;
         const n = ex.nombre;
         if (ex.lado === 'unilateral') {
             for (let i = 1; i <= numSets; i++) {
                 const s1 = await addSet({
                     session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Izq)`, numero_serie: i,
-                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false, tipo_serie: tipoSerie, superset_id: supersetId
                 });
                 sessionSets.push(s1);
                 const s2 = await addSet({
                     session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Der)`, numero_serie: i,
-                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false, tipo_serie: tipoSerie, superset_id: supersetId
                 });
                 sessionSets.push(s2);
             }
@@ -43,7 +48,7 @@ export async function renderActiveWorkout() {
             for (let i = 1; i <= numSets; i++) {
                 const s = await addSet({
                     session_id: sessionData.id, exercise_id: ex.id, exercise_name: n, numero_serie: i,
-                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false, tipo_serie: tipoSerie, superset_id: supersetId
                 });
                 sessionSets.push(s);
             }
@@ -57,7 +62,7 @@ export async function renderActiveWorkout() {
             const key = set.exercise_id || set.exercise_name;
             if (!groups[key]) {
                 const ex = allExercises.find(e => e.id === set.exercise_id);
-                groups[key] = { exercise: ex, name: ex?.nombre || set.exercise_name?.replace(/ \((Izq|Der)\)$/, ''), sets: [], isResistance: ex?.es_resistencia || false };
+                groups[key] = { exercise: ex, name: ex?.nombre || set.exercise_name?.replace(/ \((Izq|Der)\)$/, ''), sets: [], isResistance: ex?.es_resistencia || false, supersetId: set.superset_id };
             }
             groups[key].sets.push(set);
         });
@@ -74,7 +79,12 @@ export async function renderActiveWorkout() {
             const w = re.peso_objetivo_kg || (lastSet ? lastSet.peso_kg : 0);
             const reps = re.reps_sugeridas || (lastSet ? lastSet.repeticiones : 10);
             const dur = re.duracion_objetivo_seg || (lastSet ? lastSet.duracion_seg : 0);
-            await createSetsForExercise(ex, numSets, w, reps, dur);
+
+            if (re.descanso_seg) {
+                localStorage.setItem(`rest_${ex.id}`, re.descanso_seg);
+            }
+
+            await createSetsForExercise(ex, numSets, w, reps, dur, 'normal', re.superset_id);
 
             if (!ex.es_resistencia && maxWeights[ex.id] === undefined) {
                 maxWeights[ex.id] = await getMaxWeight(ex.id);
@@ -93,13 +103,23 @@ export async function renderActiveWorkout() {
 
     // Calculate elapsed seconds
     function getElapsed() {
-        if (!sessionStart) return 0;
+        if (!sessionStart) return sessionElapsedOffset;
+        if (sessionPaused) return sessionElapsedOffset;
         const [h, m] = sessionStart.split(':').map(Number);
         const now = new Date();
         const startMin = h * 60 + m;
         const nowMin = now.getHours() * 60 + now.getMinutes();
         const secs = (nowMin - startMin) * 60 + now.getSeconds();
-        return secs < 0 ? secs + 86400 : secs;
+        const realElapsed = secs < 0 ? secs + 86400 : secs;
+        return realElapsed + sessionElapsedOffset;
+    }
+
+    async function saveSessionState() {
+        sessionData.elapsed_offset = sessionElapsedOffset;
+        sessionData.paused = sessionPaused;
+        sessionData.hora_inicio = sessionStart;
+        localStorage.setItem('activeSession', JSON.stringify(sessionData));
+        await updateSession(sessionData.id, { hora_inicio: sessionStart });
     }
 
     function render() {
@@ -114,15 +134,55 @@ export async function renderActiveWorkout() {
         header.innerHTML = `
           <button class="back-btn" id="back-btn">←</button>
           <span class="header-title" style="flex:1">🏋️ En curso</span>
-          <span id="session-clock" class="text-sm" style="color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums">${formatTimer(getElapsed())}</span>
+          <button id="session-clock-btn" class="btn btn-ghost btn-sm" style="color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;padding:0;min-width:60px">
+            ${sessionPaused ? '⏸ ' : ''}${formatTimer(getElapsed())}
+          </button>
         `;
         s.appendChild(header);
 
         // Session timer update
-        const clockEl = header.querySelector('#session-clock');
+        const clockBtn = header.querySelector('#session-clock-btn');
         sessionTimerInterval = setInterval(() => {
-            if (clockEl) clockEl.textContent = formatTimer(getElapsed());
+            if (clockBtn && !sessionPaused) clockBtn.innerHTML = `${sessionPaused ? '⏸ ' : ''}${formatTimer(getElapsed())}`;
         }, 1000);
+
+        clockBtn.onclick = () => {
+            const m = document.createElement('div');
+            m.innerHTML = `
+                <div class="mb-md text-center text-sm text-secondary">Control del Entrenamiento</div>
+                <button class="btn ${sessionPaused ? 'btn-primary' : 'btn-secondary'} btn-block mb-sm" id="toggle-pause-btn">${sessionPaused ? '▶ Reanudar' : '⏸ Pausar'}</button>
+                <div class="input-group mt-md">
+                    <label class="input-label">Cambiar hora de inicio</label>
+                    <input type="time" class="input" id="edit-start-time" value="${sessionStart || ''}">
+                </div>
+                <button class="btn btn-primary btn-block mt-md" id="save-time-btn">Guardar</button>
+             `;
+            m.querySelector('#toggle-pause-btn').onclick = () => {
+                if (sessionPaused) {
+                    sessionPaused = false;
+                    // On resume, we reset start time to now so we calculate delta correctly, but offset has historical
+                    const now = new Date();
+                    sessionStart = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                } else {
+                    sessionPaused = true;
+                    sessionElapsedOffset = getElapsed();
+                }
+                saveSessionState();
+                document.querySelector('.modal-overlay')?.remove();
+                render();
+            };
+            m.querySelector('#save-time-btn').onclick = () => {
+                const newT = m.querySelector('#edit-start-time').value;
+                if (newT) {
+                    sessionStart = newT;
+                    sessionElapsedOffset = 0; // reset offset if manually changing start
+                    saveSessionState();
+                }
+                document.querySelector('.modal-overlay')?.remove();
+                render();
+            };
+            showModal({ title: 'Cronómetro', content: m });
+        };
 
         // Back button — cancel workout
         header.querySelector('#back-btn').onclick = () => {
@@ -157,14 +217,24 @@ export async function renderActiveWorkout() {
             s.innerHTML += `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Agrega ejercicios a tu sesión</div></div>`;
         }
 
-        groups.forEach(g => {
+        groups.forEach((g, idx) => {
             const block = document.createElement('div');
             block.className = 'exercise-block';
+
+            // Superset link styling if linked to previous
+            if (idx > 0 && g.supersetId && g.supersetId === groups[idx - 1].supersetId) {
+                const linkIcon = document.createElement('div');
+                linkIcon.style.cssText = 'position:absolute; top:-25px; left:20px; font-size:24px; color:var(--accent); z-index:1';
+                linkIcon.textContent = '🔗';
+                block.style.position = 'relative';
+                block.style.marginTop = 'var(--sp-xs)';
+                block.appendChild(linkIcon);
+            }
 
             // Exercise header with info button
             const ehdr = document.createElement('div');
             ehdr.className = 'exercise-header';
-            const prText = (!g.isResistance && maxWeights[g.exercise?.id]) ? `<span style="font-size:0.8rem;color:var(--accent);margin-left:8px">🏆 PR: ${maxWeights[g.exercise.id]} kg</span>` : '';
+            const prText = (!g.isResistance && maxWeights[g.exercise?.id]) ? `<span style="font-size:0.8rem;color:var(--accent);margin-left:8px">🏆 PR: ${maxWeights[g.exercise.id]} ${weightUnit}</span>` : '';
             ehdr.innerHTML = `<span class="exercise-name">${g.name}${prText}</span><div class="flex gap-sm items-center">${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}<button class="btn btn-ghost btn-sm ex-info-btn" title="Info y alternativas">ℹ️</button></div>`;
             ehdr.querySelector('.ex-info-btn').onclick = () => showExInfo(g.exercise);
 
@@ -187,13 +257,15 @@ export async function renderActiveWorkout() {
             // Set headers
             const hdr = document.createElement('div');
             hdr.className = 'set-row header';
-            hdr.innerHTML = `<div>Set</div><div>${g.isResistance ? 'Seg' : 'Kg'}</div><div>${g.isResistance ? '' : 'Reps'}</div><div>✓</div>`;
+            hdr.style.gridTemplateColumns = '30px 1fr 1fr 40px 30px';
+            hdr.innerHTML = `<div>Set</div><div>${g.isResistance ? 'Seg' : weightUnit}</div><div>${g.isResistance ? '' : 'Reps'}</div><div>Tipo</div><div>✓</div>`;
             block.appendChild(hdr);
 
             // Sets
             g.sets.forEach(set => {
                 const row = document.createElement('div');
                 row.className = 'set-row';
+                row.style.gridTemplateColumns = '30px 1fr 1fr 40px 30px';
                 row.innerHTML = `<div class="set-num">${set.numero_serie}</div>`;
 
                 // Weight / Duration input
@@ -203,7 +275,7 @@ export async function renderActiveWorkout() {
                 inp1.inputMode = 'decimal';
                 inp1.step = g.isResistance ? '1' : '0.5';
                 inp1.value = g.isResistance ? (set.duracion_seg || '') : (set.peso_kg || '');
-                inp1.placeholder = g.isResistance ? 'seg' : 'kg';
+                inp1.placeholder = g.isResistance ? 'seg' : weightUnit;
                 inp1.onchange = () => {
                     const val = parseFloat(inp1.value) || 0;
                     updateSet(set.id, g.isResistance ? { duracion_seg: val } : { peso_kg: val });
@@ -232,6 +304,18 @@ export async function renderActiveWorkout() {
                     row.appendChild(inp2);
                 }
 
+                // Type selector
+                const typeSel = document.createElement('select');
+                typeSel.className = 'set-type-sel';
+                typeSel.style.cssText = 'background:transparent;border:none;color:var(--text);font-size:0.8rem;text-align:center;-webkit-appearance:none;appearance:none;cursor:pointer;opacity:0.8';
+                const tOpts = { 'normal': 'N', 'calentamiento': 'W', 'dropset': 'D', 'fallo': 'F' };
+                typeSel.innerHTML = Object.entries(tOpts).map(([k, v]) => `<option value="${k}" ${set.tipo_serie === k ? 'selected' : ''}>${v}</option>`).join('');
+                typeSel.onchange = () => {
+                    set.tipo_serie = typeSel.value;
+                    updateSet(set.id, { tipo_serie: set.tipo_serie });
+                };
+                row.appendChild(typeSel);
+
                 // Check button
                 const check = document.createElement('button');
                 check.className = 'set-check' + (set.completada ? ' done' : '');
@@ -249,7 +333,8 @@ export async function renderActiveWorkout() {
                             nextSet.peso_kg = set.peso_kg;
                             nextSet.repeticiones = set.repeticiones;
                             nextSet.duracion_seg = set.duracion_seg;
-                            await updateSet(nextSet.id, { peso_kg: set.peso_kg, repeticiones: set.repeticiones, duracion_seg: set.duracion_seg });
+                            nextSet.tipo_serie = set.tipo_serie;
+                            await updateSet(nextSet.id, { peso_kg: set.peso_kg, repeticiones: set.repeticiones, duracion_seg: set.duracion_seg, tipo_serie: set.tipo_serie });
                             render();
                         }
 
@@ -301,13 +386,13 @@ export async function renderActiveWorkout() {
                     const s1 = await addSet({
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: `${baseName} (Izq)`, numero_serie: newNum,
-                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(s1);
                     const s2 = await addSet({
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: `${baseName} (Der)`, numero_serie: newNum,
-                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(s2);
                 } else {
@@ -315,7 +400,7 @@ export async function renderActiveWorkout() {
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: lastSet.exercise_name, numero_serie: lastSet.numero_serie + (isLeft || isRight ? 0 : 1),
                         peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0,
-                        duracion_seg: lastSet.duracion_seg || 0, completada: false
+                        duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(newSet);
                 }
@@ -457,26 +542,66 @@ export async function renderActiveWorkout() {
         notaGrp.innerHTML = `<label class="input-label">Notas</label><textarea class="input" id="fin-notas" placeholder="¿Cómo fue la sesión?"></textarea>`;
         content.appendChild(notaGrp);
 
+        if (sessionData.rutina_id) {
+            const updGrp = document.createElement('div');
+            updGrp.className = 'mt-md';
+            updGrp.innerHTML = `<label style="display:flex;align-items:center;gap:10px;font-size:0.9rem;cursor:pointer"><input type="checkbox" id="fin-update-routine" checked> Actualizar plantilla original con los cambios de hoy</label>`;
+            content.appendChild(updGrp);
+        }
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn btn-primary btn-block btn-lg mt-lg';
         saveBtn.textContent = '💾 Guardar y Terminar';
         saveBtn.onclick = async () => {
             if (sessionTimerInterval) clearInterval(sessionTimerInterval);
             notas = content.querySelector('#fin-notas').value;
+            const updateRoutine = content.querySelector('#fin-update-routine')?.checked;
+
             const now = new Date();
             const horaFin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
             let duracion = null;
-            if (sessionData.hora_inicio) {
-                const [h1, m1] = sessionData.hora_inicio.split(':').map(Number);
-                const [h2, m2] = horaFin.split(':').map(Number);
-                duracion = (h2 * 60 + m2) - (h1 * 60 + m1);
-                if (duracion < 0) duracion += 1440;
+            if (sessionStart) {
+                // Best effort via getElapsed since there might be pauses
+                duracion = Math.round(getElapsed() / 60);
             }
             await updateSession(sessionData.id, {
                 hora_fin: horaFin, duracion_min: duracion,
                 rpe, dolor_espalda_durante: dolor, notas,
                 completada: true
             });
+
+            if (updateRoutine && sessionData.rutina_id) {
+                // Determine exercise list from actual sessionSets
+                // We just keep the first instance of each exercise to preserve order
+                const existingExs = [];
+                const finalRoutineRows = [];
+                sessionSets.forEach(s => {
+                    const exId = s.exercise_id;
+                    if (!existingExs.includes(exId)) {
+                        existingExs.push(exId);
+                        // find its sets
+                        const exSets = sessionSets.filter(os => os.exercise_id === exId);
+                        const weight = Math.max(...exSets.map(x => x.peso_kg || 0));
+                        const targetReps = Math.max(...exSets.map(x => x.repeticiones || 0));
+                        finalRoutineRows.push({
+                            routine_id: sessionData.rutina_id,
+                            exercise_id: exId,
+                            orden: existingExs.length - 1,
+                            series_sugeridas: exSets.length, // L/R might double count, simplistic for now
+                            reps_sugeridas: targetReps,
+                            peso_objetivo_kg: weight,
+                            duracion_objetivo_seg: exSets[0].duracion_seg || null
+                        });
+                    }
+                });
+                // Delete existing routine exercises and insert new ones
+                const { supabase } = await import('../db/supabaseClient.js');
+                await supabase.from('routine_exercises').delete().eq('routine_id', sessionData.rutina_id);
+                if (finalRoutineRows.length > 0) {
+                    await supabase.from('routine_exercises').insert(finalRoutineRows);
+                }
+            }
+
             localStorage.removeItem('activeSession');
             localStorage.removeItem('routineExercises');
             document.querySelector('.modal-overlay')?.remove();

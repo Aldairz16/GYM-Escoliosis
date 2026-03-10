@@ -2,9 +2,12 @@
 const routes = {};
 let contentEl = null;
 
+let activePath = null;
+
 export function registerRoute(path, handler) { routes[path] = handler; }
 
 export function navigate(path) {
+    if (window.location.hash.slice(1) === path) return;
     window.location.hash = path;
 }
 
@@ -20,8 +23,14 @@ export function initRouter(container) {
 
 async function handleRoute() {
     const path = currentPath();
+    if (path === activePath) return;
+
+    activePath = path;
     const handler = routes[path];
-    if (!handler || !contentEl) return;
+    if (!handler || !contentEl) {
+        activePath = null;
+        return;
+    }
 
     contentEl.innerHTML = '';
     try {
