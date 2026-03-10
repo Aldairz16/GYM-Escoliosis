@@ -36,17 +36,65 @@ export async function renderSettings() {
     // Goals
     const metaSesiones = await getConfig('meta_sesiones', 3);
     const restDefault = await getConfig('rest_timer', 60);
+    const soundUrl = await getConfig('rest_timer_sound_url', 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     const goalsCard = document.createElement('div');
     goalsCard.className = 'card';
     goalsCard.innerHTML = '<h3 class="section-title">🎯 Metas y Timers</h3>';
     goalsCard.appendChild(createInput({ label: 'Sesiones de fuerza / semana', type: 'number', id: 'cfg-sesiones', value: metaSesiones, min: 1, max: 7 }));
     goalsCard.appendChild(createInput({ label: 'Descanso entre series (seg)', type: 'number', id: 'cfg-rest', value: restDefault, min: 10, step: '5' }));
+
+    // Audio options
+    const audioGrp = document.createElement('div');
+    audioGrp.className = 'input-group mb-md';
+    audioGrp.innerHTML = `
+        <label class="input-label">Sonido de descanso</label>
+        <select class="input mb-sm" id="cfg-sound-sel">
+            <option value="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3">Campana (Por defecto)</option>
+            <option value="https://assets.mixkit.co/active_storage/sfx/1000/1000-preview.mp3">Notificación corta</option>
+            <option value="custom">URL Personalizada / Subir</option>
+        </select>
+        <input type="text" class="input" id="cfg-sound-custom" value="${soundUrl}" placeholder="https://..." style="display:none">
+        <button class="btn btn-sm btn-ghost mt-xs" id="cfg-sound-test">▶ Probar Sonido</button>
+    `;
+
+    const sel = audioGrp.querySelector('#cfg-sound-sel');
+    const cus = audioGrp.querySelector('#cfg-sound-custom');
+
+    // Set initial select state based on current config URL
+    const isCustom = !Array.from(sel.options).slice(0, 2).some(o => o.value === soundUrl);
+    if (isCustom) {
+        sel.value = 'custom';
+        cus.style.display = 'block';
+    } else {
+        sel.value = soundUrl;
+    }
+
+    sel.onchange = () => {
+        if (sel.value === 'custom') {
+            cus.style.display = 'block';
+            cus.focus();
+        } else {
+            cus.style.display = 'none';
+            cus.value = sel.value;
+        }
+    };
+
+    audioGrp.querySelector('#cfg-sound-test').onclick = () => {
+        const urlToPlay = sel.value === 'custom' ? cus.value : sel.value;
+        if (!urlToPlay) return showToast('Coloca una URL válida');
+        const audio = new Audio(urlToPlay);
+        audio.play().catch(() => showToast('Error al reproducir el sonido'));
+    };
+    goalsCard.appendChild(audioGrp);
+
     const saveGoals = document.createElement('button');
     saveGoals.className = 'btn btn-primary btn-block';
     saveGoals.textContent = '💾 Guardar';
     saveGoals.onclick = async () => {
         await setConfig('meta_sesiones', parseInt(s.querySelector('#cfg-sesiones').value) || 3);
         await setConfig('rest_timer', parseInt(s.querySelector('#cfg-rest').value) || 60);
+        const finalSound = s.querySelector('#cfg-sound-sel').value === 'custom' ? s.querySelector('#cfg-sound-custom').value : s.querySelector('#cfg-sound-sel').value;
+        await setConfig('rest_timer_sound_url', finalSound);
         showToast('✅ Metas actualizadas');
     };
     goalsCard.appendChild(saveGoals);

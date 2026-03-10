@@ -1,5 +1,5 @@
 // Active Workout Screen — live tracking with timers
-import { getExercises, addSet, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight, getLastSet, getMaxWeight, deleteSession, getConfig } from '../db/supabase.js';
+import { getExercises, addSet, addSetsBulk, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight, getLastSet, getMaxWeight, deleteSession, getConfig } from '../db/supabase.js';
 import { navigate } from '../router.js';
 import { showToast, showModal, formatTimer, createSlider, CATEGORIES } from '../components/ui.js';
 
@@ -18,10 +18,13 @@ export async function renderActiveWorkout() {
     const sessionData = JSON.parse(localStorage.getItem('activeSession') || 'null');
     if (!sessionData) { navigate('/workout'); return s; }
 
+    s.innerHTML = `<div class="empty"><div class="empty-icon text-accent" style="animation:spin 1s linear infinite">⏳</div><div class="empty-text">Preparando tu sesión...</div></div>`;
+
     const allExercises = await getExercises();
     let sessionSets = await getSessionSets(sessionData.id);
     const routineExs = JSON.parse(localStorage.getItem('routineExercises') || '[]');
     let restTime = await getConfig('rest_timer', 60);
+    const soundUrl = await getConfig('rest_timer_sound_url', 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
     const weightUnit = await getConfig('unidad_peso', 'kg');
     let sessionStart = sessionData.hora_inicio || null;
     sessionElapsedOffset = sessionData.elapsed_offset || 0;
@@ -71,6 +74,7 @@ export async function renderActiveWorkout() {
 
     // Pre-load routine exercises as empty sets
     if (routineExs.length > 0 && sessionSets.length === 0) {
+        let newSetsData = [];
         for (const re of routineExs) {
             const ex = re.exercises || allExercises.find(e => e.id === re.exercise_id);
             if (!ex) continue;
@@ -84,12 +88,39 @@ export async function renderActiveWorkout() {
                 localStorage.setItem(`rest_${ex.id}`, re.descanso_seg);
             }
 
-            await createSetsForExercise(ex, numSets, w, reps, dur, 'normal', re.superset_id);
+            // Build objects for bulk insert
+            const n = ex.nombre;
+            const isRes = ex.es_resistencia;
+            if (ex.lado === 'unilateral') {
+                for (let i = 1; i <= numSets; i++) {
+                    newSetsData.push({
+                        session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Izq)`, numero_serie: i,
+                        peso_kg: w, repeticiones: isRes ? null : reps, duracion_seg: isRes ? dur : null, completada: false, tipo_serie: 'normal', superset_id: re.superset_id
+                    });
+                    newSetsData.push({
+                        session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Der)`, numero_serie: i,
+                        peso_kg: w, repeticiones: isRes ? null : reps, duracion_seg: isRes ? dur : null, completada: false, tipo_serie: 'normal', superset_id: re.superset_id
+                    });
+                }
+            } else {
+                for (let i = 1; i <= numSets; i++) {
+                    newSetsData.push({
+                        session_id: sessionData.id, exercise_id: ex.id, exercise_name: n, numero_serie: i,
+                        peso_kg: w, repeticiones: isRes ? null : reps, duracion_seg: isRes ? dur : null, completada: false, tipo_serie: 'normal', superset_id: re.superset_id
+                    });
+                }
+            }
 
             if (!ex.es_resistencia && maxWeights[ex.id] === undefined) {
                 maxWeights[ex.id] = await getMaxWeight(ex.id);
             }
         }
+
+        if (newSetsData.length > 0) {
+            const insertedSets = await addSetsBulk(newSetsData);
+            sessionSets.push(...insertedSets);
+        }
+
         localStorage.removeItem('routineExercises');
     }
 
@@ -630,7 +661,7 @@ export async function renderActiveWorkout() {
                 overlay.remove();
                 try {
                     navigator.vibrate?.([300, 100, 300]);
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    const audio = new Audio(soundUrl);
                     audio.play().catch(e => console.log('Audio error:', e));
                 } catch (e) { }
             }

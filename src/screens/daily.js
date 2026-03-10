@@ -1,5 +1,5 @@
 // Daily Log Screen
-import { getDailyLog, saveDailyLog, getDailyLogs } from '../db/supabase.js';
+import { getDailyLog, saveDailyLog, getDailyLogs, deleteDailyLog } from '../db/supabase.js';
 import { showToast, today, createSlider, createInput, formatDate } from '../components/ui.js';
 import { navigate } from '../router.js';
 
@@ -15,6 +15,7 @@ export async function renderDaily() {
 
     let fecha = today();
     let pasos = 0, dolor = 0, energia = 5, notas = '';
+    let logExists = false;
 
     const dateInput = document.createElement('div');
     dateInput.className = 'input-group';
@@ -69,6 +70,7 @@ export async function renderDaily() {
     async function loadDay(d) {
         fecha = d;
         const log = await getDailyLog(fecha);
+        logExists = !!log;
         pasos = log?.pasos_totales || 0;
         dolor = log?.dolor_espalda_fin_dia ?? 0;
         energia = log?.energia_fin_dia ?? 5;
@@ -83,8 +85,11 @@ export async function renderDaily() {
         formEl.appendChild(createSlider({ label: 'Energía', id: 'dl-energia', min: 0, max: 10, value: energia, onChange: v => energia = v }));
         formEl.appendChild(createInput({ label: 'Notas', type: 'textarea', id: 'dl-notas', value: notas, placeholder: 'Mucho tiempo de pie, día de estudio, etc.' }));
 
+        const btnGrp = document.createElement('div');
+        btnGrp.className = 'flex gap-sm mt-lg';
+
         const btn = document.createElement('button');
-        btn.className = 'btn btn-primary btn-block btn-lg mt-lg';
+        btn.className = 'btn btn-primary flex-1 btn-lg';
         btn.textContent = '💾 Guardar y Limpiar';
         btn.onclick = async () => {
             pasos = parseInt(formEl.querySelector('#dl-pasos').value) || 0;
@@ -97,16 +102,64 @@ export async function renderDaily() {
                 fecha = today();
                 s.querySelector('#dl-date').value = fecha;
                 pasos = 0; dolor = 0; energia = 5; notas = '';
+                logExists = false;
                 renderForm();
 
                 // Refresh history
                 loadHistory();
             } catch (e) { showToast('❌ ' + e.message); }
         };
-        formEl.appendChild(btn);
+        btnGrp.appendChild(btn);
+
+        if (logExists) {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn-danger btn-lg';
+            delBtn.textContent = '🗑️';
+            delBtn.onclick = async () => {
+                if (!confirm(`¿Eliminar el registro del ${formatDate(fecha)}?`)) return;
+                try {
+                    await deleteDailyLog(fecha);
+                    showToast('🗑️ Registro eliminado');
+                    fecha = today();
+                    s.querySelector('#dl-date').value = fecha;
+                    pasos = 0; dolor = 0; energia = 5; notas = '';
+                    logExists = false;
+                    renderForm();
+                    loadHistory();
+                } catch (e) { showToast('❌ ' + e.message); }
+            };
+            btnGrp.appendChild(delBtn);
+        }
+
+        formEl.appendChild(btnGrp);
     }
 
-    s.querySelector('#dl-date').onchange = e => loadDay(e.target.value);
+    s.querySelector('#dl-date').onchange = async e => {
+        const newD = e.target.value;
+        const log = await getDailyLog(newD);
+
+        // Always save what the user had currently typed before switching dates
+        if (formEl.querySelector('#dl-pasos')) {
+            pasos = parseInt(formEl.querySelector('#dl-pasos').value) || 0;
+            notas = formEl.querySelector('#dl-notas').value;
+        }
+
+        if (log) {
+            // If the new date has data, overwrite the form to show that data
+            fecha = newD;
+            logExists = true;
+            pasos = log.pasos_totales || 0;
+            dolor = log.dolor_espalda_fin_dia ?? 0;
+            energia = log.energia_fin_dia ?? 5;
+            notas = log.notas || '';
+        } else {
+            // New date has no data, so just update the date but keep the user's typed inputs!
+            fecha = newD;
+            logExists = false;
+        }
+        renderForm();
+    };
+
     await loadDay(fecha);
     await loadHistory();
     return s;

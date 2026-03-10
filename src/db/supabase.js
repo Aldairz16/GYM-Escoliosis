@@ -149,6 +149,14 @@ export async function addSet(set) {
     return data;
 }
 
+export async function addSetsBulk(setsArr) {
+    if (!setsArr || setsArr.length === 0) return [];
+    const { data, error } = await supabase.from('workout_sets')
+        .insert(setsArr).select();
+    if (error) throw error;
+    return data || [];
+}
+
 export async function updateSet(id, updates) {
     const { data, error } = await supabase.from('workout_sets')
         .update(updates).eq('id', id).select().single();
@@ -276,6 +284,13 @@ export async function saveDailyLog(log) {
         .upsert({ ...log, user_id: uid }, { onConflict: 'user_id,fecha' }).select().single();
     if (error) throw error;
     return data;
+}
+
+export async function deleteDailyLog(fecha) {
+    const uid = await getUserId();
+    const { error } = await supabase.from('daily_logs')
+        .delete().eq('user_id', uid).eq('fecha', fecha);
+    if (error) throw error;
 }
 
 export async function getDailyLogs(from, to) {
