@@ -51,8 +51,6 @@ async function startApp() {
   registerRoute('/measurements', renderMeasurements);
   registerRoute('/settings', renderSettings);
 
-  initRouter(content);
-
   // Auto-resume active workout if one exists
   const activeSession = localStorage.getItem('activeSession');
   if (activeSession) {
@@ -63,6 +61,8 @@ async function startApp() {
       }
     } catch (e) { localStorage.removeItem('activeSession'); }
   }
+
+  initRouter(content);
 
   // Service worker
   if ('serviceWorker' in navigator) {

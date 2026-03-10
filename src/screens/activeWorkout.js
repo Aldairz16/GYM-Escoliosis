@@ -1,7 +1,9 @@
 // Active Workout Screen — live tracking with timers
-import { getExercises, addSet, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight, deleteSession, getConfig } from '../db/supabase.js';
+import { getExercises, addSet, updateSet, deleteSet, getSessionSets, updateSession, getLastWeight, getLastSet, getMaxWeight, deleteSession, getConfig } from '../db/supabase.js';
 import { navigate } from '../router.js';
 import { showToast, showModal, formatTimer, createSlider, CATEGORIES } from '../components/ui.js';
+
+let maxWeights = {};
 
 let restInterval = null;
 let resistanceInterval = null;
@@ -20,6 +22,34 @@ export async function renderActiveWorkout() {
     let restTime = await getConfig('rest_timer', 60);
     const sessionStart = sessionData.hora_inicio || null;
 
+    // Helper to add sets (handles unilateral)
+    async function createSetsForExercise(ex, numSets, w = 0, reps = 10, dur = 0) {
+        if (!ex) return;
+        const n = ex.nombre;
+        if (ex.lado === 'unilateral') {
+            for (let i = 1; i <= numSets; i++) {
+                const s1 = await addSet({
+                    session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Izq)`, numero_serie: i,
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                });
+                sessionSets.push(s1);
+                const s2 = await addSet({
+                    session_id: sessionData.id, exercise_id: ex.id, exercise_name: `${n} (Der)`, numero_serie: i,
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                });
+                sessionSets.push(s2);
+            }
+        } else {
+            for (let i = 1; i <= numSets; i++) {
+                const s = await addSet({
+                    session_id: sessionData.id, exercise_id: ex.id, exercise_name: n, numero_serie: i,
+                    peso_kg: w, repeticiones: ex.es_resistencia ? null : reps, duracion_seg: ex.es_resistencia ? dur : null, completada: false
+                });
+                sessionSets.push(s);
+            }
+        }
+    }
+
     // Group sets by exercise
     function groupSets() {
         const groups = {};
@@ -27,7 +57,7 @@ export async function renderActiveWorkout() {
             const key = set.exercise_id || set.exercise_name;
             if (!groups[key]) {
                 const ex = allExercises.find(e => e.id === set.exercise_id);
-                groups[key] = { exercise: ex, name: set.exercise_name || ex?.nombre, sets: [], isResistance: ex?.es_resistencia || false };
+                groups[key] = { exercise: ex, name: ex?.nombre || set.exercise_name?.replace(/ \((Izq|Der)\)$/, ''), sets: [], isResistance: ex?.es_resistencia || false };
             }
             groups[key].sets.push(set);
         });
@@ -40,20 +70,25 @@ export async function renderActiveWorkout() {
             const ex = re.exercises || allExercises.find(e => e.id === re.exercise_id);
             if (!ex) continue;
             const numSets = re.series_sugeridas || 3;
-            const lastW = await getLastWeight(ex.id);
-            for (let i = 1; i <= numSets; i++) {
-                const newSet = await addSet({
-                    session_id: sessionData.id, exercise_id: ex.id,
-                    exercise_name: ex.nombre, numero_serie: i,
-                    peso_kg: re.peso_objetivo_kg || lastW || 0,
-                    repeticiones: ex.es_resistencia ? null : (re.reps_sugeridas || 10),
-                    duracion_seg: ex.es_resistencia ? (re.duracion_objetivo_seg || 0) : null,
-                    completada: false
-                });
-                sessionSets.push(newSet);
+            const lastSet = await getLastSet(ex.id);
+            const w = re.peso_objetivo_kg || (lastSet ? lastSet.peso_kg : 0);
+            const reps = re.reps_sugeridas || (lastSet ? lastSet.repeticiones : 10);
+            const dur = re.duracion_objetivo_seg || (lastSet ? lastSet.duracion_seg : 0);
+            await createSetsForExercise(ex, numSets, w, reps, dur);
+
+            if (!ex.es_resistencia && maxWeights[ex.id] === undefined) {
+                maxWeights[ex.id] = await getMaxWeight(ex.id);
             }
         }
         localStorage.removeItem('routineExercises');
+    }
+
+    // Load PRs for existing sets
+    const initialGroups = groupSets();
+    for (const g of initialGroups) {
+        if (!g.isResistance && g.exercise && maxWeights[g.exercise.id] === undefined) {
+            maxWeights[g.exercise.id] = await getMaxWeight(g.exercise.id);
+        }
     }
 
     // Calculate elapsed seconds
@@ -129,8 +164,24 @@ export async function renderActiveWorkout() {
             // Exercise header with info button
             const ehdr = document.createElement('div');
             ehdr.className = 'exercise-header';
-            ehdr.innerHTML = `<span class="exercise-name">${g.name}</span><div class="flex gap-sm items-center">${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}<button class="btn btn-ghost btn-sm ex-info-btn" title="Info y alternativas">ℹ️</button></div>`;
+            const prText = (!g.isResistance && maxWeights[g.exercise?.id]) ? `<span style="font-size:0.8rem;color:var(--accent);margin-left:8px">🏆 PR: ${maxWeights[g.exercise.id]} kg</span>` : '';
+            ehdr.innerHTML = `<span class="exercise-name">${g.name}${prText}</span><div class="flex gap-sm items-center">${g.isResistance ? '<span class="exercise-badge">⏱ Resistencia</span>' : ''}<button class="btn btn-ghost btn-sm ex-info-btn" title="Info y alternativas">ℹ️</button></div>`;
             ehdr.querySelector('.ex-info-btn').onclick = () => showExInfo(g.exercise);
+
+            const restBtn = document.createElement('button');
+            restBtn.className = 'btn btn-ghost btn-sm';
+            restBtn.style.fontSize = '0.75rem';
+            const exRest = parseInt(localStorage.getItem(`rest_${g.exercise?.id}`)) || restTime;
+            restBtn.innerHTML = `⏱ ${exRest}s`;
+            restBtn.onclick = () => {
+                let r = parseInt(prompt('Segundos de descanso para este ejercicio:', exRest));
+                if (r > 0) {
+                    localStorage.setItem(`rest_${g.exercise?.id}`, r);
+                    render();
+                }
+            };
+            ehdr.querySelector('.flex').insertBefore(restBtn, ehdr.querySelector('.ex-info-btn'));
+
             block.appendChild(ehdr);
 
             // Set headers
@@ -190,7 +241,21 @@ export async function renderActiveWorkout() {
                     await updateSet(set.id, { completada: set.completada });
                     check.className = 'set-check' + (set.completada ? ' done' : '');
                     check.textContent = set.completada ? '✓' : '○';
-                    if (set.completada) startRestTimer(restTime);
+
+                    if (set.completada) {
+                        // Propagate values to next uncompleted set of same exercise
+                        const nextSet = g.sets.find(s => !s.completada && s.numero_serie >= set.numero_serie && s.id !== set.id);
+                        if (nextSet) {
+                            nextSet.peso_kg = set.peso_kg;
+                            nextSet.repeticiones = set.repeticiones;
+                            nextSet.duracion_seg = set.duracion_seg;
+                            await updateSet(nextSet.id, { peso_kg: set.peso_kg, repeticiones: set.repeticiones, duracion_seg: set.duracion_seg });
+                            render();
+                        }
+
+                        const exRest = parseInt(localStorage.getItem(`rest_${g.exercise?.id}`)) || restTime;
+                        startRestTimer(exRest);
+                    }
                 };
                 row.appendChild(check);
                 block.appendChild(row);
@@ -226,13 +291,34 @@ export async function renderActiveWorkout() {
             addBtn.textContent = '+ Serie';
             addBtn.onclick = async () => {
                 const lastSet = g.sets[g.sets.length - 1];
-                const newSet = await addSet({
-                    session_id: sessionData.id, exercise_id: lastSet.exercise_id,
-                    exercise_name: lastSet.exercise_name, numero_serie: g.sets.length + 1,
-                    peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0,
-                    duracion_seg: lastSet.duracion_seg || 0, completada: false
-                });
-                sessionSets.push(newSet);
+                let isLeft = lastSet.exercise_name?.endsWith('(Izq)');
+                let isRight = lastSet.exercise_name?.endsWith('(Der)');
+
+                // If it's a unilateral exercise that already has L/R, add both
+                if ((isLeft || isRight) && g.exercise?.lado === 'unilateral') {
+                    const newNum = lastSet.numero_serie + 1;
+                    const baseName = g.exercise.nombre;
+                    const s1 = await addSet({
+                        session_id: sessionData.id, exercise_id: lastSet.exercise_id,
+                        exercise_name: `${baseName} (Izq)`, numero_serie: newNum,
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false
+                    });
+                    sessionSets.push(s1);
+                    const s2 = await addSet({
+                        session_id: sessionData.id, exercise_id: lastSet.exercise_id,
+                        exercise_name: `${baseName} (Der)`, numero_serie: newNum,
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false
+                    });
+                    sessionSets.push(s2);
+                } else {
+                    const newSet = await addSet({
+                        session_id: sessionData.id, exercise_id: lastSet.exercise_id,
+                        exercise_name: lastSet.exercise_name, numero_serie: lastSet.numero_serie + (isLeft || isRight ? 0 : 1),
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0,
+                        duracion_seg: lastSet.duracion_seg || 0, completada: false
+                    });
+                    sessionSets.push(newSet);
+                }
                 render();
             };
             actions.appendChild(addBtn);
@@ -242,9 +328,20 @@ export async function renderActiveWorkout() {
             delLast.textContent = '− Última';
             delLast.onclick = async () => {
                 if (g.sets.length <= 1) return;
+
                 const last = g.sets[g.sets.length - 1];
-                await deleteSet(last.id);
-                sessionSets = sessionSets.filter(s2 => s2.id !== last.id);
+                let toDelete = [last];
+
+                // If unilateral, delete both L and R of the last series
+                if (g.exercise?.lado === 'unilateral') {
+                    const partner = g.sets.find(s => s.numero_serie === last.numero_serie && s.id !== last.id);
+                    if (partner) toDelete.push(partner);
+                }
+
+                for (let s of toDelete) {
+                    await deleteSet(s.id);
+                    sessionSets = sessionSets.filter(s2 => s2.id !== s.id);
+                }
                 render();
             };
             actions.appendChild(delLast);
@@ -326,19 +423,18 @@ export async function renderActiveWorkout() {
                   ${ex.url_imagen ? `<img src="${ex.url_imagen}" style="width:40px;height:40px;border-radius:var(--r-sm);object-fit:cover;flex-shrink:0" alt="">` : ''}
                   <div class="list-item-body"><div class="list-item-title">${ex.nombre}</div><div class="list-item-sub">${ex.categoria}${ex.es_resistencia ? ' • ⏱ resistencia' : ''}</div></div>`;
                 item.onclick = async () => {
-                    const lastW = await getLastWeight(ex.id);
+                    const lastSet = await getLastSet(ex.id);
                     const numSets = ex.series_sugeridas || 3;
-                    for (let i = 1; i <= numSets; i++) {
-                        const newSet = await addSet({
-                            session_id: sessionData.id, exercise_id: ex.id,
-                            exercise_name: ex.nombre, numero_serie: i,
-                            peso_kg: lastW || 0,
-                            repeticiones: ex.es_resistencia ? null : (ex.reps_sugeridas || 10),
-                            duracion_seg: ex.es_resistencia ? (ex.tiempo_sugerido_seg || 0) : null,
-                            completada: false
-                        });
-                        sessionSets.push(newSet);
+                    const w = lastSet?.peso_kg || 0;
+                    const reps = lastSet?.repeticiones || ex.reps_sugeridas || 10;
+                    const dur = lastSet?.duracion_seg || ex.tiempo_sugerido_seg || 0;
+
+                    await createSetsForExercise(ex, numSets, w, reps, dur);
+
+                    if (!ex.es_resistencia && maxWeights[ex.id] === undefined) {
+                        maxWeights[ex.id] = await getMaxWeight(ex.id);
                     }
+
                     document.querySelector('.modal-overlay')?.remove();
                     render();
                 };
@@ -407,7 +503,11 @@ export async function renderActiveWorkout() {
                 clearInterval(restInterval);
                 restInterval = null;
                 overlay.remove();
-                try { navigator.vibrate?.(300); } catch (e) { }
+                try {
+                    navigator.vibrate?.([300, 100, 300]);
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.play().catch(e => console.log('Audio error:', e));
+                } catch (e) { }
             }
         }, 1000);
 
@@ -473,9 +573,39 @@ export async function renderActiveWorkout() {
             ex.alternativas_ids.forEach(altId => {
                 const altEx = allExercises.find(e => e.id === altId);
                 if (!altEx) return;
-                const it = document.createElement('div'); it.className = 'list-item'; it.style.cursor = 'pointer';
-                it.innerHTML = `<div class="list-item-body"><div class="list-item-title">${altEx.nombre}</div><div class="list-item-sub">${altEx.descripcion ? altEx.descripcion.slice(0, 80) + '...' : altEx.categoria}</div></div>`;
-                it.onclick = () => { document.querySelector('.modal-overlay')?.remove(); showExInfo(altEx); };
+                const it = document.createElement('div'); it.className = 'list-item flex flex-col items-start gap-xs'; it.style.cursor = 'pointer';
+                const mainRow = document.createElement('div');
+                mainRow.className = 'flex justify-between w-full items-center';
+                mainRow.innerHTML = `<div class="list-item-body"><div class="list-item-title">${altEx.nombre}</div><div class="list-item-sub">${altEx.descripcion ? altEx.descripcion.slice(0, 80) + '...' : altEx.categoria}</div></div>`;
+
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-sm btn-secondary mt-sm w-full';
+                btn.textContent = 'Reemplazar en sesión';
+                btn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const setsToReplace = sessionSets.filter(s => s.exercise_id === ex.id && !s.completada);
+                    if (setsToReplace.length === 0) {
+                        showToast('No hay series incompletas para reemplazar de ' + ex.nombre);
+                        return;
+                    }
+                    if (!confirm(`¿Reemplazar ${setsToReplace.length} series incompletas por ${altEx.nombre}?`)) return;
+
+                    for (const s of setsToReplace) {
+                        s.exercise_id = altEx.id;
+                        s.exercise_name = s.exercise_name?.includes('(Izq)') ? `${altEx.nombre} (Izq)` : s.exercise_name?.includes('(Der)') ? `${altEx.nombre} (Der)` : altEx.nombre;
+                        await updateSet(s.id, { exercise_id: altEx.id, exercise_name: s.exercise_name });
+                    }
+                    if (!altEx.es_resistencia && maxWeights[altEx.id] === undefined) {
+                        maxWeights[altEx.id] = await getMaxWeight(altEx.id);
+                    }
+                    document.querySelector('.modal-overlay')?.remove();
+                    showToast('✅ Ejercicio reemplazado');
+                    render();
+                };
+
+                mainRow.onclick = () => { document.querySelector('.modal-overlay')?.remove(); showExInfo(altEx); };
+                it.appendChild(mainRow);
+                it.appendChild(btn);
                 content.appendChild(it);
             });
         }

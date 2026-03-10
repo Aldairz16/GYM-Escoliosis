@@ -180,6 +180,28 @@ export async function getLastWeight(exerciseId) {
     return data?.peso_kg || 0;
 }
 
+export async function getLastSet(exerciseId) {
+    const { data, error } = await supabase.from('workout_sets')
+        .select('peso_kg, repeticiones, duracion_seg')
+        .eq('exercise_id', exerciseId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+    if (error) return null;
+    return data;
+}
+
+export async function getMaxWeight(exerciseId) {
+    const { data, error } = await supabase.from('workout_sets')
+        .select('peso_kg')
+        .eq('exercise_id', exerciseId)
+        .order('peso_kg', { ascending: false })
+        .limit(1)
+        .single();
+    if (error) return 0;
+    return data?.peso_kg || 0;
+}
+
 // ==================== Routines ====================
 export async function getRoutines() {
     const { data, error } = await supabase.from('routines')
