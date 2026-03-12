@@ -363,13 +363,25 @@ export async function exportData(from, to) {
         if (to) q = q.lte('fecha', to);
         return q;
     };
-    const [sessions, sets_raw, daily, measurements, supplements] = await Promise.all([
+    const [sessions, daily, measurements, supplements] = await Promise.all([
         range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        range(supabase.from('workout_sets').select('*, workout_sessions!inner(user_id,fecha)').eq('workout_sessions.user_id', uid)).then(r => r.data || []),
         range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha').then(r => r.data || []),
     ]);
+
+    // Fetch sets only for the filtered sessions to ensure date range is respected
+    const sessionIds = sessions.map(s => s.id);
+    let sets_raw = [];
+    if (sessionIds.length > 0) {
+        // Fetch in batches if necessary, but Supabase 'in' usually handles up to 1000 items fine
+        const { data } = await supabase.from('workout_sets')
+            .select('*, workout_sessions!inner(user_id,fecha)')
+            .eq('workout_sessions.user_id', uid)
+            .in('session_id', sessionIds);
+        sets_raw = data || [];
+    }
+
 
     // Re-sort sets manually by session_id/created_at if needed, since inner join ordering can be tricky
     const sets = sets_raw.sort((a, b) => a.session_id.localeCompare(b.session_id) || a.numero_serie - b.numero_serie);
