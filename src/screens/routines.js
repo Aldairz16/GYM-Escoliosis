@@ -191,8 +191,9 @@ export async function renderRoutines() {
                             } else {
                                 routineExs.push(newExObj);
                             }
-                            // Using next sibling traversal if multiple modals
-                            document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+                            // Remove only the top modal
+                            const modals = document.querySelectorAll('.modal-overlay');
+                            if (modals.length > 0) modals[modals.length - 1].remove();
                             renderEditor();
                         };
                         picker.appendChild(it);

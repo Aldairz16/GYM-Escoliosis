@@ -288,15 +288,15 @@ export async function renderActiveWorkout() {
             // Set headers
             const hdr = document.createElement('div');
             hdr.className = 'set-row header';
-            hdr.style.gridTemplateColumns = '30px 1fr 1fr 40px 30px';
-            hdr.innerHTML = `<div>Set</div><div>${g.isResistance ? 'Seg' : weightUnit}</div><div>${g.isResistance ? '' : 'Reps'}</div><div>Tipo</div><div>✓</div>`;
+            hdr.style.gridTemplateColumns = '30px 1fr 1fr 1fr 40px 30px';
+            hdr.innerHTML = `<div>Set</div><div>${g.isResistance ? 'Seg' : weightUnit}</div><div>${g.isResistance ? '' : 'Reps'}</div><div>Desc.</div><div>Tipo</div><div>✓</div>`;
             block.appendChild(hdr);
 
             // Sets
             g.sets.forEach(set => {
                 const row = document.createElement('div');
                 row.className = 'set-row';
-                row.style.gridTemplateColumns = '30px 1fr 1fr 40px 30px';
+                row.style.gridTemplateColumns = '30px 1fr 1fr 1fr 40px 30px';
                 row.innerHTML = `<div class="set-num">${set.numero_serie}</div>`;
 
                 // Weight / Duration input
@@ -343,6 +343,19 @@ export async function renderActiveWorkout() {
                     };
                     row.appendChild(inp2);
                 }
+
+                // Descanso input
+                const inpDesc = document.createElement('input');
+                inpDesc.className = 'set-input';
+                inpDesc.type = 'number';
+                inpDesc.inputMode = 'numeric';
+                inpDesc.value = set.descanso_prev_seg || '';
+                inpDesc.placeholder = 'seg';
+                inpDesc.onchange = () => {
+                    set.descanso_prev_seg = parseInt(inpDesc.value) || null;
+                    updateSet(set.id, { descanso_prev_seg: set.descanso_prev_seg });
+                };
+                row.appendChild(inpDesc);
 
                 // Type selector
                 const typeSel = document.createElement('select');
@@ -426,21 +439,21 @@ export async function renderActiveWorkout() {
                     const s1 = await addSet({
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: `${baseName} (Izq)`, numero_serie: newNum,
-                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: g.isResistance ? null : (lastSet.repeticiones || 0), duracion_seg: g.isResistance ? (lastSet.duracion_seg || 0) : null, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(s1);
                     const s2 = await addSet({
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: `${baseName} (Der)`, numero_serie: newNum,
-                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0, duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: g.isResistance ? null : (lastSet.repeticiones || 0), duracion_seg: g.isResistance ? (lastSet.duracion_seg || 0) : null, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(s2);
                 } else {
                     const newSet = await addSet({
                         session_id: sessionData.id, exercise_id: lastSet.exercise_id,
                         exercise_name: lastSet.exercise_name, numero_serie: lastSet.numero_serie + (isLeft || isRight ? 0 : 1),
-                        peso_kg: lastSet.peso_kg || 0, repeticiones: lastSet.repeticiones || 0,
-                        duracion_seg: lastSet.duracion_seg || 0, completada: false, tipo_serie: 'normal'
+                        peso_kg: lastSet.peso_kg || 0, repeticiones: g.isResistance ? null : (lastSet.repeticiones || 0),
+                        duracion_seg: g.isResistance ? (lastSet.duracion_seg || 0) : null, completada: false, tipo_serie: 'normal'
                     });
                     sessionSets.push(newSet);
                 }
@@ -609,6 +622,12 @@ export async function renderActiveWorkout() {
                 rpe, dolor_espalda_durante: dolor, notas,
                 completada: true
             });
+
+            // Eliminar series incompletas de la BD para que no ensucien el historial
+            const uncompleted = sessionSets.filter(s => !s.completada);
+            for (const s of uncompleted) {
+                try { await deleteSet(s.id); } catch (e) { }
+            }
 
             if (updateRoutine && sessionData.rutina_id) {
                 // Determine exercise list from actual sessionSets

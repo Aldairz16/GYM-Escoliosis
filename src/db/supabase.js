@@ -363,13 +363,16 @@ export async function exportData(from, to) {
         if (to) q = q.lte('fecha', to);
         return q;
     };
-    const [sessions, sets, daily, measurements, supplements] = await Promise.all([
+    const [sessions, sets_raw, daily, measurements, supplements] = await Promise.all([
         range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        supabase.from('workout_sets').select('*, workout_sessions!inner(user_id,fecha)').eq('workout_sessions.user_id', uid).order('session_id').then(r => r.data || []),
+        range(supabase.from('workout_sets').select('*, workout_sessions!inner(user_id,fecha)').eq('workout_sessions.user_id', uid)).then(r => r.data || []),
         range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
         supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha').then(r => r.data || []),
     ]);
+
+    // Re-sort sets manually by session_id/created_at if needed, since inner join ordering can be tricky
+    const sets = sets_raw.sort((a, b) => a.session_id.localeCompare(b.session_id) || a.numero_serie - b.numero_serie);
     return { sessions, sets, daily, measurements, supplements };
 }
 
