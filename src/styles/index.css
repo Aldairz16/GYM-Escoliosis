@@ -153,8 +153,9 @@ body {
         top: 0;
         background: var(--bg-surface);
         border-right: 1px solid var(--border);
-        z-index: 50;
+        z-index: 150;
         padding: var(--sp-xl) 0;
+        pointer-events: auto;
     }
 
     .app-content {
@@ -206,6 +207,9 @@ body {
     border: none;
     font-family: var(--font);
     width: 100%;
+    text-align: left;
+    position: relative;
+    z-index: 60;
 }
 
 .sidebar-item:hover,

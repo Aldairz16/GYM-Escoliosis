@@ -26,8 +26,8 @@ async function startApp() {
   const shell = document.createElement('div');
   shell.className = 'app-shell';
 
-  // Sidebar (visible on PC via CSS)
-  shell.appendChild(renderSidebar());
+  const sidebarEl = renderSidebar();
+  shell.appendChild(sidebarEl);
 
   // Content area
   const content = document.createElement('main');
