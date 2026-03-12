@@ -47,6 +47,9 @@ export function renderSidebar() {
     });
 
     sidebar.appendChild(nav);
-    sidebar.innerHTML += `<div class="sidebar-footer">Mi Progreso v2.0</div>`;
+    const footer = document.createElement('div');
+    footer.className = 'sidebar-footer';
+    footer.textContent = 'Mi Progreso v2.0';
+    sidebar.appendChild(footer);
     return sidebar;
 }
