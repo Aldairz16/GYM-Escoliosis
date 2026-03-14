@@ -360,7 +360,7 @@ export async function exportData(from, to) {
     const uid = await getUserId();
     const range = (q) => {
         if (from) q = q.gte('fecha', from);
-        if (to) q = q.lte('fecha', to);
+        if (to) q = q.lte('fecha', to.includes('T') ? to : to + 'T23:59:59.999Z');
         return q;
     };
     const [sessions, daily, measurements, supplements] = await Promise.all([
@@ -376,7 +376,7 @@ export async function exportData(from, to) {
     if (sessionIds.length > 0) {
         // Fetch in batches if necessary, but Supabase 'in' usually handles up to 1000 items fine
         const { data } = await supabase.from('workout_sets')
-            .select('*, workout_sessions!inner(user_id,fecha)')
+            .select('*, workout_sessions!inner(user_id,fecha), exercises(nombre)')
             .eq('workout_sessions.user_id', uid)
             .in('session_id', sessionIds);
         sets_raw = data || [];
@@ -384,7 +384,10 @@ export async function exportData(from, to) {
 
 
     // Re-sort sets manually by session_id/created_at if needed, since inner join ordering can be tricky
-    const sets = sets_raw.sort((a, b) => a.session_id.localeCompare(b.session_id) || a.numero_serie - b.numero_serie);
+    const sets = sets_raw.map(s => ({
+        ...s,
+        exercise_name: s.exercises?.nombre || 'Desconocido'
+    })).sort((a, b) => a.session_id.localeCompare(b.session_id) || a.numero_serie - b.numero_serie);
     return { sessions, sets, daily, measurements, supplements };
 }
 

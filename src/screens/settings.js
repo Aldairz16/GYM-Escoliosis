@@ -130,7 +130,12 @@ export async function renderSettings() {
         const from = s.querySelector('#exp-from').value || undefined;
         const to = s.querySelector('#exp-to').value || undefined;
         const data = await exportData(from, to);
-        downloadFile(JSON.stringify(data, null, 2), 'mi_progreso_export.json', 'application/json');
+        
+        const d = new Date();
+        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico.json`;
+
+        downloadFile(JSON.stringify(data, null, 2), fileName, 'application/json');
         showToast('✅ JSON descargado');
     };
     exportCard.appendChild(exportJsonBtn);
