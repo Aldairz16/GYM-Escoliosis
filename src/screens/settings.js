@@ -134,7 +134,17 @@ export async function renderSettings() {
             
             const d = new Date();
             const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico.json`;
+            
+            // Calculate unique days
+            const uniqueDays = new Set([
+                ...data.sessions.map(s => s.fecha),
+                ...data.daily.map(d => d.fecha),
+                ...data.measurements.map(m => m.fecha),
+                ...(data.supplements || []).map(s => s.fecha)
+            ].filter(Boolean));
+            
+            const dayCount = uniqueDays.size;
+            const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico (${dayCount} días).json`;
 
             downloadFile(JSON.stringify(data, null, 2), fileName, 'application/json');
             showToast('✅ JSON descargado');
