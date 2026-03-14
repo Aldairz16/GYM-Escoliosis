@@ -389,7 +389,11 @@ export async function exportData(from, to) {
     const sets = sets_raw.map(s => ({
         ...s,
         exercise_name: s.exercises?.nombre || 'Desconocido'
-    })).sort((a, b) => a.session_id.localeCompare(b.session_id) || a.numero_serie - b.numero_serie);
+    })).sort((a, b) => {
+        const idA = String(a.session_id || '');
+        const idB = String(b.session_id || '');
+        return idA.localeCompare(idB) || (a.numero_serie - b.numero_serie);
+    });
     return { sessions, sets, daily, measurements, supplements };
 }
 
