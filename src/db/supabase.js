@@ -360,7 +360,7 @@ export async function exportData(from, to) {
     const uid = await getUserId();
     const range = (q) => {
         if (from) q = q.gte('fecha', from);
-        if (to) q = q.lte('fecha', to.includes('T') ? to : to + 'T23:59:59.999Z');
+        if (to) q = q.lte('fecha', to);
         return q;
     };
     const [sessions, daily, measurements, supplements] = await Promise.all([
