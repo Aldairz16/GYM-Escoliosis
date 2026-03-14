@@ -132,19 +132,39 @@ export async function renderSettings() {
             const to = s.querySelector('#exp-to').value || undefined;
             const data = await exportData(from, to);
             
-            const d = new Date();
             const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
             
-            // Calculate unique days
-            const uniqueDays = new Set([
+            // Calculate unique days and sorted range
+            const daysList = Array.from(new Set([
                 ...data.sessions.map(s => s.fecha),
                 ...data.daily.map(d => d.fecha),
                 ...data.measurements.map(m => m.fecha),
                 ...(data.supplements || []).map(s => s.fecha)
-            ].filter(Boolean));
+            ].filter(Boolean))).sort();
             
-            const dayCount = uniqueDays.size;
-            const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico (${dayCount} días).json`;
+            let dateText = '';
+            if (daysList.length > 0) {
+                const firstDate = new Date(daysList[0] + 'T12:00:00');
+                const lastDate = new Date(daysList[daysList.length - 1] + 'T12:00:00');
+                
+                const d1 = String(firstDate.getDate()).padStart(2, '0');
+                const d2 = String(lastDate.getDate()).padStart(2, '0');
+                const m1 = months[firstDate.getMonth()];
+                const m2 = months[lastDate.getMonth()];
+
+                if (daysList.length === 1) {
+                    dateText = `${d1} ${m1}`;
+                } else if (firstDate.getMonth() === lastDate.getMonth()) {
+                    dateText = `${d1}-${d2} ${m1}`;
+                } else {
+                    dateText = `${d1} ${m1} al ${d2} ${m2}`;
+                }
+            } else {
+                const now = new Date();
+                dateText = `${now.getDate()} ${months[now.getMonth()]}`;
+            }
+            
+            const fileName = `${dateText} Mi avance fisico.json`;
 
             downloadFile(JSON.stringify(data, null, 2), fileName, 'application/json');
             showToast('✅ JSON descargado');
