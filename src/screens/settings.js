@@ -127,16 +127,21 @@ export async function renderSettings() {
     exportJsonBtn.className = 'btn btn-secondary btn-block mb-md';
     exportJsonBtn.textContent = '📦 Exportar JSON';
     exportJsonBtn.onclick = async () => {
-        const from = s.querySelector('#exp-from').value || undefined;
-        const to = s.querySelector('#exp-to').value || undefined;
-        const data = await exportData(from, to);
-        
-        const d = new Date();
-        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico.json`;
+        try {
+            const from = s.querySelector('#exp-from').value || undefined;
+            const to = s.querySelector('#exp-to').value || undefined;
+            const data = await exportData(from, to);
+            
+            const d = new Date();
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            const fileName = `${d.getDate()} de ${months[d.getMonth()]} Mi avance fisico.json`;
 
-        downloadFile(JSON.stringify(data, null, 2), fileName, 'application/json');
-        showToast('✅ JSON descargado');
+            downloadFile(JSON.stringify(data, null, 2), fileName, 'application/json');
+            showToast('✅ JSON descargado');
+        } catch (e) {
+            console.error('Error exportando JSON:', e);
+            showToast('❌ Error al exportar: ' + e.message);
+        }
     };
     exportCard.appendChild(exportJsonBtn);
 
@@ -144,14 +149,19 @@ export async function renderSettings() {
     exportCsvBtn.className = 'btn btn-secondary btn-block mb-md';
     exportCsvBtn.textContent = '📄 Exportar CSV (sesiones + series)';
     exportCsvBtn.onclick = async () => {
-        const from = s.querySelector('#exp-from').value || undefined;
-        const to = s.querySelector('#exp-to').value || undefined;
-        const data = await exportData(from, to);
-        if (data.sessions.length) downloadFile(toCSV(data.sessions, ['fecha', 'tipo_sesion', 'duracion_min', 'rpe', 'dolor_espalda_durante', 'notas']), 'sesiones.csv');
-        if (data.sets.length) downloadFile(toCSV(data.sets, ['session_id', 'exercise_name', 'numero_serie', 'peso_kg', 'repeticiones', 'duracion_seg', 'observaciones']), 'series.csv');
-        if (data.daily.length) downloadFile(toCSV(data.daily, ['fecha', 'pasos_totales', 'dolor_espalda_fin_dia', 'energia_fin_dia', 'notas']), 'diario.csv');
-        if (data.measurements.length) downloadFile(toCSV(data.measurements, ['fecha', 'peso_kg', 'cintura_cm', 'cadera_cm']), 'medidas.csv');
-        showToast('✅ CSVs descargados');
+        try {
+            const from = s.querySelector('#exp-from').value || undefined;
+            const to = s.querySelector('#exp-to').value || undefined;
+            const data = await exportData(from, to);
+            if (data.sessions.length) downloadFile(toCSV(data.sessions, ['fecha', 'tipo_sesion', 'duracion_min', 'rpe', 'dolor_espalda_durante', 'notas']), 'sesiones.csv');
+            if (data.sets.length) downloadFile(toCSV(data.sets, ['session_id', 'exercise_name', 'numero_serie', 'peso_kg', 'repeticiones', 'duracion_seg', 'observaciones']), 'series.csv');
+            if (data.daily.length) downloadFile(toCSV(data.daily, ['fecha', 'pasos_totales', 'dolor_espalda_fin_dia', 'energia_fin_dia', 'notas']), 'diario.csv');
+            if (data.measurements.length) downloadFile(toCSV(data.measurements, ['fecha', 'peso_kg', 'cintura_cm', 'cadera_cm']), 'medidas.csv');
+            showToast('✅ CSVs descargados');
+        } catch (e) {
+            console.error('Error exportando CSV:', e);
+            showToast('❌ Error al exportar CSV: ' + e.message);
+        }
     };
     exportCard.appendChild(exportCsvBtn);
     s.appendChild(exportCard);

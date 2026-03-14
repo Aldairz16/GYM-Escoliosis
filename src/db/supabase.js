@@ -364,21 +364,23 @@ export async function exportData(from, to) {
         return q;
     };
     const [sessions, daily, measurements, supplements] = await Promise.all([
-        range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => r.data || []),
-        supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha').then(r => r.data || []),
+        range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('WS Error:', r.error); return r.data || []; }),
+        range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('DL Error:', r.error); return r.data || []; }),
+        range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('BM Error:', r.error); return r.data || []; }),
+        range(supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('SL Error:', r.error); return r.data || []; }),
     ]);
 
     // Fetch sets only for the filtered sessions to ensure date range is respected
     const sessionIds = sessions.map(s => s.id);
     let sets_raw = [];
     if (sessionIds.length > 0) {
-        // Fetch in batches if necessary, but Supabase 'in' usually handles up to 1000 items fine
-        const { data } = await supabase.from('workout_sets')
-            .select('*, workout_sessions!inner(user_id,fecha), exercises(nombre)')
-            .eq('workout_sessions.user_id', uid)
+        // Fetch sets for these specific sessions
+        // We include exercises(nombre) to have the name in the JSON
+        const { data, error } = await supabase.from('workout_sets')
+            .select('*, exercises(nombre)')
             .in('session_id', sessionIds);
+        
+        if (error) console.error('Sets Error:', error);
         sets_raw = data || [];
     }
 
