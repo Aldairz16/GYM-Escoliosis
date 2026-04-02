@@ -1,6 +1,6 @@
 {
-  "name": "Mi Progreso",
-  "short_name": "Mi Progreso",
+  "name": "Gravity Gym",
+  "short_name": "Gravity Gym",
   "description": "Seguimiento de escoliosis, entrenamiento, sueño, alimentación y progreso personal",
   "start_url": "/",
   "display": "standalone",
