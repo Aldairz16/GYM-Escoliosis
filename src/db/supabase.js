@@ -115,7 +115,8 @@ export async function deleteSession(id) {
 
 export async function getSessionDates(year, month) {
     const start = `${year}-${String(month).padStart(2, '0')}-01`;
-    const end = `${year}-${String(month).padStart(2, '0')}-31`;
+    const endDay = String(new Date(year, month, 0).getDate()).padStart(2, '0');
+    const end = `${year}-${String(month).padStart(2, '0')}-${endDay}`;
     const { data, error } = await supabase.from('workout_sessions')
         .select('fecha').gte('fecha', start).lte('fecha', end);
     if (error) throw error;
