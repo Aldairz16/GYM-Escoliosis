@@ -14,6 +14,7 @@ import { renderExercises } from './screens/exercises.js';
 import { renderDaily } from './screens/daily.js';
 import { renderMeasurements } from './screens/measurements.js';
 import { renderSettings } from './screens/settings.js';
+import { renderPastWorkout } from './screens/pastWorkout.js';
 
 async function startApp() {
   // Load theme
@@ -49,6 +50,7 @@ async function startApp() {
   registerRoute('/exercises', renderExercises);
   registerRoute('/daily', renderDaily);
   registerRoute('/measurements', renderMeasurements);
+  registerRoute('/past-workout', renderPastWorkout);
   registerRoute('/settings', renderSettings);
 
   // Auto-resume active workout if one exists

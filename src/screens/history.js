@@ -23,7 +23,7 @@ export async function renderHistory() {
     const addBtn = document.createElement('button');
     addBtn.className = 'btn btn-secondary btn-block mt-lg';
     addBtn.textContent = '+ Agregar sesión pasada';
-    addBtn.onclick = () => navigate('/workout');
+    addBtn.onclick = () => navigate('/past-workout');
     s.appendChild(addBtn);
 
     async function renderCalendar() {
@@ -96,7 +96,7 @@ export async function renderHistory() {
               </div>`;
             listContainer.querySelector('#btn-add-past').onclick = () => {
                 sessionStorage.setItem('prefillWorkoutDate', date);
-                navigate('/workout');
+                navigate('/past-workout');
             };
             return;
         }
