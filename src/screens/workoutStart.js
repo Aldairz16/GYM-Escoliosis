@@ -14,9 +14,11 @@ export async function renderWorkoutStart() {
     s.innerHTML = `<h1 class="screen-title">Nuevo Entrenamiento</h1><p class="screen-subtitle">Configura tu sesión</p>`;
 
     // Date
+    const prefillDate = sessionStorage.getItem('prefillWorkoutDate') || today();
+    sessionStorage.removeItem('prefillWorkoutDate');
     const dateGroup = document.createElement('div');
     dateGroup.className = 'input-group';
-    dateGroup.innerHTML = `<label class="input-label">Fecha</label><input type="date" class="input" id="ws-date" value="${today()}">`;
+    dateGroup.innerHTML = `<label class="input-label">Fecha</label><input type="date" class="input" id="ws-date" value="${prefillDate}">`;
     s.appendChild(dateGroup);
 
     // Type chips

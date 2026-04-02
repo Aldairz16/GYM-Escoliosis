@@ -89,7 +89,15 @@ export async function renderHistory() {
         listContainer.innerHTML = '';
 
         if (sessions.length === 0) {
-            listContainer.innerHTML = `<div class="empty mt-lg"><div class="empty-text">Sin sesiones el ${formatDate(date)}</div></div>`;
+            listContainer.innerHTML = `
+              <div class="empty mt-lg">
+                <div class="empty-text">Sin sesiones el ${formatDate(date)}</div>
+                <button class="btn btn-primary btn-sm mt-md" id="btn-add-past">+ Registrar sesión</button>
+              </div>`;
+            listContainer.querySelector('#btn-add-past').onclick = () => {
+                sessionStorage.setItem('prefillWorkoutDate', date);
+                navigate('/workout');
+            };
             return;
         }
 
