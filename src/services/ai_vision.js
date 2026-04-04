@@ -13,7 +13,7 @@ export async function analyzeFoodImageBase64(base64Data, mimeType) {
             {
                 parts: [
                     {
-                        text: "Analiza la siguiente imagen de comida, identifica qué es y devuelve ÚNICAMENTE un objeto JSON válido con las siguientes propiedades matemáticas estimadas (usa números para los valores nutricionales, no strings, y trata de ser preciso para una porción promedio de lo que se ve en la imagen): { \"nombre_comida\": \"Nombre de la comida\", \"calorias\": 500, \"proteinas\": 20.5, \"carbohidratos\": 50.0, \"grasas\": 15.2 }. Si detectas múltiples alimentos, súmalos y dale un nombre representativo al plato. No incluyas backticks (```) ni la palabra 'json' ni ningún otro texto en tu respuesta, SOLO devuelve el JSON."
+                        text: "Analiza la siguiente imagen de comida, identifica sus ingredientes principales por separado y devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta: { \"ingredientes\": [ { \"nombre\": \"Carne De Res\", \"cantidad_g\": 150, \"calorias\": 375, \"proteinas\": 39.0, \"carbohidratos\": 0.0, \"grasas\": 29.0 } ] }. Estima con mayor precisión el peso en gramos (cantidad_g) y los valores nutricionales (calorias, proteinas, carbohidratos, grasas) por cada ingrediente o porción detectada. Mantén las claves tal cual. No incluyas backticks (```) ni la palabra 'json' ni ningún otro texto en tu respuesta, SOLO devuelve el JSON puro."
                     },
                     {
                         inline_data: {

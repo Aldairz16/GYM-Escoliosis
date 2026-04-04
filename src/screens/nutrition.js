@@ -125,48 +125,122 @@ export async function renderNutrition() {
         loadDay(e.target.value);
     };
 
-    // Agregar manual config
+    // Agregar manual o escaneado
     function openFoodModal(initialData = null) {
         const m = document.createElement('div');
-        m.innerHTML = `
-            ${initialData && initialData.ai ? '<div class="bg-success text-success p-sm text-xs rounded mb-md text-center">✨ Analizado por Gemini IA ✨</div>' : ''}
-            <div class="input-group mb-sm"><label class="input-label">Nombre de Comida</label><input type="text" class="input" id="f-name" value="${initialData?.nombre_comida || ''}" placeholder="Ej: Pechuga con Arroz"></div>
-            <div class="flex gap-sm mb-sm">
-                <div class="input-group" style="flex:1;"><label class="input-label">Calorías (kcal)</label><input type="number" class="input" id="f-cal" value="${initialData?.calorias || 0}"></div>
-                <div class="input-group" style="flex:1;"><label class="input-label">Proteínas (g)</label><input type="number" step="0.1" class="input" id="f-prot" value="${initialData?.proteinas || 0}"></div>
-            </div>
-            <div class="flex gap-sm mb-md">
-                <div class="input-group" style="flex:1;"><label class="input-label">Carbs (g)</label><input type="number" step="0.1" class="input" id="f-carb" value="${initialData?.carbohidratos || 0}"></div>
-                <div class="input-group" style="flex:1;"><label class="input-label">Grasas (g)</label><input type="number" step="0.1" class="input" id="f-fat" value="${initialData?.grasas || 0}"></div>
-            </div>
-            <div class="input-group mb-lg"><label class="input-label">Hora</label><input type="time" class="input" id="f-time" value="${new Date().toTimeString().slice(0, 5)}"></div>
-            <button class="btn btn-primary btn-block" id="f-save">Guardar Comida</button>
-        `;
         
-        m.querySelector('#f-save').onclick = async () => {
-            const nombre = m.querySelector('#f-name').value;
-            if(!nombre) return showToast('Agrega un nombre.');
-            
-            const logData = {
-                fecha: fecha,
-                hora: m.querySelector('#f-time').value,
-                nombre_comida: nombre,
-                calorias: parseInt(m.querySelector('#f-cal').value) || 0,
-                proteinas: parseFloat(m.querySelector('#f-prot').value) || 0,
-                carbohidratos: parseFloat(m.querySelector('#f-carb').value) || 0,
-                grasas: parseFloat(m.querySelector('#f-fat').value) || 0
+        // Si no viene de IA, es registro manual simple
+        if (!initialData || !initialData.ai) {
+            m.innerHTML = `
+                <div class="input-group mb-sm"><label class="input-label">Nombre de Comida</label><input type="text" class="input" id="f-name" value="${initialData?.nombre_comida || ''}" placeholder="Ej: Pechuga con Arroz"></div>
+                <div class="flex gap-sm mb-sm">
+                    <div class="input-group" style="flex:1;"><label class="input-label">Calorías (kcal)</label><input type="number" class="input" id="f-cal" value="${initialData?.calorias || 0}"></div>
+                    <div class="input-group" style="flex:1;"><label class="input-label">Proteínas (g)</label><input type="number" step="0.1" class="input" id="f-prot" value="${initialData?.proteinas || 0}"></div>
+                </div>
+                <div class="flex gap-sm mb-md">
+                    <div class="input-group" style="flex:1;"><label class="input-label">Carbs (g)</label><input type="number" step="0.1" class="input" id="f-carb" value="${initialData?.carbohidratos || 0}"></div>
+                    <div class="input-group" style="flex:1;"><label class="input-label">Grasas (g)</label><input type="number" step="0.1" class="input" id="f-fat" value="${initialData?.grasas || 0}"></div>
+                </div>
+                <div class="input-group mb-lg"><label class="input-label">Hora</label><input type="time" class="input" id="f-time" value="${new Date().toTimeString().slice(0, 5)}"></div>
+                <button class="btn btn-primary btn-block" id="f-save">Guardar Comida</button>
+            `;
+            m.querySelector('#f-save').onclick = async () => {
+                const nombre = m.querySelector('#f-name').value || 'Comida Manual';
+                const logData = {
+                    fecha: fecha, hora: m.querySelector('#f-time').value, nombre_comida: nombre,
+                    calorias: parseInt(m.querySelector('#f-cal').value) || 0,
+                    proteinas: parseFloat(m.querySelector('#f-prot').value) || 0,
+                    carbohidratos: parseFloat(m.querySelector('#f-carb').value) || 0,
+                    grasas: parseFloat(m.querySelector('#f-fat').value) || 0
+                };
+                await saveAndClose(logData);
             };
+        } else {
+            // Diseño de IA con ingredientes (como captura de pantalla)
+            let ingredients = initialData.ingredientes || [];
+            
+            const renderModalUI = () => {
+                let tKcal = 0, tProt = 0, tCarb = 0, tFat = 0, tCant = 0;
+                ingredients.forEach(i => {
+                    tCant += (i.cantidad_g || 0);
+                    tKcal += (i.calorias || 0);
+                    tProt += (i.proteinas || 0);
+                    tCarb += (i.carbohidratos || 0);
+                    tFat += (i.grasas || 0);
+                });
 
+                m.innerHTML = `
+                    <style>
+                        .nutri-card { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); padding: 12px; text-align: center; flex: 1; }
+                        .nutri-val { font-size: 1.5rem; font-weight: bold; color: var(--text-primary); }
+                        .nutri-lbl { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; margin-bottom: 2px; }
+                        .ingr-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding: 16px 0; }
+                        .ingr-name { font-weight: bold; color: var(--text-primary); margin-bottom: 4px; font-size: 0.95rem; }
+                        .ingr-macros { font-size: 0.8rem; color: var(--text-secondary); }
+                        .btn-minus { background: var(--bg-input); border: 1px solid var(--border); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; color: var(--text-primary); outline:none; }
+                        .btn-minus:active { background: var(--bg-card-hover); }
+                    </style>
+                    <div class="flex gap-sm mb-sm">
+                        <div class="nutri-card"><div class="nutri-lbl">CANTIDAD</div><div class="nutri-val">${tCant.toFixed(0)} g</div></div>
+                        <div class="nutri-card"><div class="nutri-lbl">CALORÍAS</div><div class="nutri-val">${tKcal.toFixed(0)}</div></div>
+                    </div>
+                    <div class="flex gap-sm mb-lg">
+                        <div class="nutri-card"><div class="nutri-lbl">CARBOHIDRATOS</div><div class="nutri-val" style="font-size:1.1rem;">🌾 ${tCarb.toFixed(0)} g</div></div>
+                        <div class="nutri-card"><div class="nutri-lbl">PROTEÍNA</div><div class="nutri-val" style="font-size:1.1rem;">🥩 ${tProt.toFixed(0)} g</div></div>
+                        <div class="nutri-card"><div class="nutri-lbl">GRASA</div><div class="nutri-val" style="font-size:1.1rem;">🥑 ${tFat.toFixed(0)} g</div></div>
+                    </div>
+                    
+                    <div class="section-label" style="opacity: 0.6;">Ingredientes</div>
+                    <div id="ai-ingr-list" style="max-height: 250px; overflow-y: auto; padding-right:4px;"></div>
+                    
+                    <div class="input-group mt-md"><label class="input-label">Hora</label><input type="time" class="input" id="f-time-ai" value="${new Date().toTimeString().slice(0, 5)}"></div>
+                    <button class="btn btn-primary btn-block btn-lg mt-md" id="f-save-ai" style="background:var(--text-primary); color:var(--bg-base);">Registrar comida</button>
+                `;
+
+                const listEl = m.querySelector('#ai-ingr-list');
+                ingredients.forEach((ing, idx) => {
+                    const el = document.createElement('div');
+                    el.className = 'ingr-item';
+                    el.innerHTML = `
+                        <div>
+                            <div class="ingr-name">${ing.nombre}</div>
+                            <div class="ingr-macros">${ing.cantidad_g} g • ${ing.calorias} kcal 🌾 ${ing.carbohidratos} 🥩 ${ing.proteinas} 🥑 ${ing.grasas}</div>
+                        </div>
+                        <button class="btn-minus" data-idx="${idx}">-</button>
+                    `;
+                    el.querySelector('.btn-minus').onclick = () => {
+                        ingredients.splice(idx, 1);
+                        renderModalUI();
+                    };
+                    listEl.appendChild(el);
+                });
+
+                m.querySelector('#f-save-ai').onclick = async () => {
+                    if (ingredients.length === 0) return showToast('No hay ingredientes para guardar.');
+                    const nombre = ingredients.map(i => i.nombre).join(', ');
+                    const logData = {
+                        fecha: fecha, hora: m.querySelector('#f-time-ai').value,
+                        nombre_comida: nombre.length > 50 ? nombre.substring(0, 47) + '...' : nombre,
+                        calorias: tKcal, proteinas: tProt, carbohidratos: tCarb, grasas: tFat
+                    };
+                    await saveAndClose(logData);
+                };
+            };
+            renderModalUI();
+        }
+
+        async function saveAndClose(logData) {
             try {
                 await addNutritionLog(logData);
                 showToast('✅ Comida registrada');
                 document.querySelector('.modal-overlay')?.remove();
                 loadDay(fecha);
             } catch (e) { showToast('❌ Error al guardar'); }
-        };
+        }
 
-        showModal({ title: initialData?.ai ? 'Revisa la Estimación' : 'Añadir Comida', content: m });
+        showModal({ title: initialData?.ai ? 'Detalles del Análisis' : 'Añadir Comida', content: m });
     }
+
 
     manualBtn.onclick = () => openFoodModal();
 
