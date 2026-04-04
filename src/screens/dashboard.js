@@ -64,7 +64,9 @@ export async function renderDashboard() {
             <div class="section-label mb-0">Nutrición Semanal</div>
             <div class="text-xs text-secondary">Objetivo: ${calGoal} kcal</div>
         </div>
-        <canvas id="nutritionCanvas" height="180"></canvas>
+        <div style="position: relative; height: 180px; width: 100%;">
+            <canvas id="nutritionCanvas"></canvas>
+        </div>
     </div>
 
     <div class="section-label mt-lg">Accesos Rápidos</div>
