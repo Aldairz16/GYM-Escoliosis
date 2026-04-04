@@ -100,6 +100,27 @@ export async function renderSettings() {
     goalsCard.appendChild(saveGoals);
     s.appendChild(goalsCard);
 
+    // Nutrition and AI Settings
+    const geminiApiKey = await getConfig('gemini_api_key', '');
+    const caloriasObjetivo = await getConfig('calorias_objetivo', 2000);
+    const nutritionCard = document.createElement('div');
+    nutritionCard.className = 'card';
+    nutritionCard.innerHTML = '<h3 class="section-title">🍏 Nutrición e IA</h3><p class="text-sm text-secondary mb-md">La API Key de Google Gemini se usa para escanear tus comidas usando IA.</p>';
+    nutritionCard.appendChild(createInput({ label: 'Objetivo de Calorías Diario (kcal)', type: 'number', id: 'cfg-calorias', value: caloriasObjetivo, min: 500, step: '50' }));
+    nutritionCard.appendChild(createInput({ label: 'Gemini API Key', type: 'password', id: 'cfg-gemini', value: geminiApiKey, placeholder: 'AIzaSy...' }));
+
+    const saveNutrition = document.createElement('button');
+    saveNutrition.className = 'btn btn-primary btn-block';
+    saveNutrition.textContent = '💾 Guardar Nutrición';
+    saveNutrition.onclick = async () => {
+        await setConfig('calorias_objetivo', parseInt(s.querySelector('#cfg-calorias').value) || 2000);
+        await setConfig('gemini_api_key', s.querySelector('#cfg-gemini').value.trim());
+        showToast('✅ Ajustes de IA guardados');
+    };
+    nutritionCard.appendChild(saveNutrition);
+    s.appendChild(nutritionCard);
+
+
     // Theme toggle
     const themeCard = document.createElement('div');
     themeCard.className = 'card';

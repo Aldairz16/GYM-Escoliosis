@@ -34,6 +34,7 @@ export function renderSidebar() {
         ...NAV_ITEMS,
         { icon: '🏃', label: 'Ejercicios', route: '/exercises' },
         { icon: '📝', label: 'Diario', route: '/daily' },
+        { icon: '🍏', label: 'Nutrición', route: '/nutrition' },
         { icon: '📏', label: 'Medidas', route: '/measurements' },
     ];
 

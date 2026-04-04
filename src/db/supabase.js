@@ -364,11 +364,12 @@ export async function exportData(from, to) {
         if (to) q = q.lte('fecha', to);
         return q;
     };
-    const [sessions, daily, measurements, supplements] = await Promise.all([
+    const [sessions, daily, measurements, supplements, nutrition] = await Promise.all([
         range(supabase.from('workout_sessions').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('WS Error:', r.error); return r.data || []; }),
         range(supabase.from('daily_logs').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('DL Error:', r.error); return r.data || []; }),
         range(supabase.from('body_measurements').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('BM Error:', r.error); return r.data || []; }),
         range(supabase.from('supplement_logs').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('SL Error:', r.error); return r.data || []; }),
+        range(supabase.from('nutrition_logs').select('*').eq('user_id', uid).order('fecha')).then(r => { if(r.error) console.error('NL Error:', r.error); return r.data || []; }),
     ]);
 
     // Fetch sets only for the filtered sessions to ensure date range is respected
@@ -395,7 +396,7 @@ export async function exportData(from, to) {
         const idB = String(b.session_id || '');
         return idA.localeCompare(idB) || (a.numero_serie - b.numero_serie);
     });
-    return { sessions, sets, daily, measurements, supplements };
+    return { sessions, sets, daily, measurements, supplements, nutrition };
 }
 
 export function toCSV(data, columns) {
@@ -417,3 +418,42 @@ export function downloadFile(content, filename, mime = 'text/csv') {
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
 }
+
+// ==================== Nutrition Logs ====================
+export async function addNutritionLog(log) {
+    const uid = await getUserId();
+    const { data, error } = await supabase.from('nutrition_logs')
+        .insert({ ...log, user_id: uid }).select().single();
+    if (error) throw error;
+    return data;
+}
+
+export async function updateNutritionLog(id, updates) {
+    const { data, error } = await supabase.from('nutrition_logs')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+}
+
+export async function deleteNutritionLog(id) {
+    const { error } = await supabase.from('nutrition_logs').delete().eq('id', id);
+    if (error) throw error;
+}
+
+export async function getNutritionLogs(fecha) {
+    const uid = await getUserId();
+    const { data, error } = await supabase.from('nutrition_logs')
+        .select('*').eq('user_id', uid).eq('fecha', fecha).order('hora', { ascending: false });
+    if (error) throw error;
+    return data || [];
+}
+
+export async function getWeeklyNutritionLogs(startStr, endStr) {
+    const uid = await getUserId();
+    const { data, error } = await supabase.from('nutrition_logs')
+        .select('*').eq('user_id', uid).gte('fecha', startStr).lte('fecha', endStr).order('fecha', { ascending: true });
+    if (error) throw error;
+    return data || [];
+}
+
