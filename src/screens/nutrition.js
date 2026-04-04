@@ -247,8 +247,33 @@ export async function renderNutrition() {
     // IA flow
     const fileInput = s.querySelector('#fi-food-img');
     const scanBtn = s.querySelector('#btn-scan-food');
+    let currentContext = '';
 
-    scanBtn.onclick = () => fileInput.click();
+    scanBtn.onclick = () => {
+        const mc = document.createElement('div');
+        mc.innerHTML = `
+            <p class="text-sm text-secondary mb-md">Añade una descripción si la comida no es fácil de identificar a simple vista (ej. un batido de proteína, un guiso, ingredientes ocultos).</p>
+            <div class="input-group mb-lg">
+                <textarea class="input" id="ai-context-input" placeholder="Opcional: Detalla qué es o qué tiene..." rows="2"></textarea>
+            </div>
+            <button class="btn btn-primary btn-block" id="btn-proceed-cam">📸 Continuar a la Foto</button>
+            <button class="btn btn-ghost btn-block mt-sm text-sm" id="btn-skip-text">Omitir y abrir cámara directo</button>
+        `;
+
+        mc.querySelector('#btn-proceed-cam').onclick = () => {
+            currentContext = mc.querySelector('#ai-context-input').value.trim();
+            document.querySelector('.modal-overlay')?.remove();
+            fileInput.click();
+        };
+
+        mc.querySelector('#btn-skip-text').onclick = () => {
+            currentContext = '';
+            document.querySelector('.modal-overlay')?.remove();
+            fileInput.click();
+        };
+
+        showModal({ title: 'Anotación (Opcional)', content: mc });
+    };
 
     fileInput.onchange = async (e) => {
         const file = e.target.files[0];
@@ -269,7 +294,8 @@ export async function renderNutrition() {
 
         try {
             const base64Data = await fileToBase64(file);
-            const aiData = await analyzeFoodImageBase64(base64Data, file.type);
+            const aiData = await analyzeFoodImageBase64(base64Data, file.type, currentContext);
+            currentContext = ''; // Reset context
             
             // Cerrar modal de carga
             document.querySelector('.modal-overlay')?.remove();
@@ -280,6 +306,7 @@ export async function renderNutrition() {
 
         } catch (error) {
             document.querySelector('.modal-overlay')?.remove();
+            currentContext = '';
             showToast('❌ Ocurrió un error: ' + error.message);
         }
     };

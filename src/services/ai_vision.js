@@ -1,11 +1,17 @@
 // Servicio para integrarse con Google Gemini Vision API
 import { getConfig } from '../db/supabase.js';
 
-export async function analyzeFoodImageBase64(base64Data, mimeType) {
+export async function analyzeFoodImageBase64(base64Data, mimeType, userContext = '') {
     const apiKey = await getConfig('gemini_api_key', '');
     
     if (!apiKey) {
         throw new Error("No has configurado tu API Key de Gemini en los Ajustes.");
+    }
+
+    let baseText = "Analiza la siguiente imagen de comida, identifica sus ingredientes principales por separado y devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta: { \"ingredientes\": [ { \"nombre\": \"Carne De Res\", \"cantidad_g\": 150, \"calorias\": 375, \"proteinas\": 39.0, \"carbohidratos\": 0.0, \"grasas\": 29.0 } ] }. Estima con mayor precisión el peso en gramos (cantidad_g) y los valores nutricionales (calorias, proteinas, carbohidratos, grasas) por cada ingrediente o porción detectada. Mantén las claves tal cual. No incluyas backticks (```) ni la palabra 'json' ni ningún otro texto en tu respuesta, SOLO devuelve el JSON puro.";
+
+    if (userContext) {
+        baseText += ` El usuario ha dejado la siguiente nota o contexto adicional sobre la comida (úsala para mejorar tu estimación): "${userContext}"`;
     }
 
     const payload = {
@@ -13,7 +19,7 @@ export async function analyzeFoodImageBase64(base64Data, mimeType) {
             {
                 parts: [
                     {
-                        text: "Analiza la siguiente imagen de comida, identifica sus ingredientes principales por separado y devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura exacta: { \"ingredientes\": [ { \"nombre\": \"Carne De Res\", \"cantidad_g\": 150, \"calorias\": 375, \"proteinas\": 39.0, \"carbohidratos\": 0.0, \"grasas\": 29.0 } ] }. Estima con mayor precisión el peso en gramos (cantidad_g) y los valores nutricionales (calorias, proteinas, carbohidratos, grasas) por cada ingrediente o porción detectada. Mantén las claves tal cual. No incluyas backticks (```) ni la palabra 'json' ni ningún otro texto en tu respuesta, SOLO devuelve el JSON puro."
+                        text: baseText
                     },
                     {
                         inline_data: {
